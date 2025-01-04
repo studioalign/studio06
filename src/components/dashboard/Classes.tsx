@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+// classes.tsx
+
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
 import WeeklyCalendar from './WeeklyCalendar';
 import AddClassForm from './AddClassForm';
@@ -9,138 +11,114 @@ import { supabase } from '../../lib/supabase';
 import { useData } from '../../contexts/DataContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { getEnrolledStudents } from '../../utils/classUtils';
+import { addDays, format } from 'date-fns';
 
-interface Class {
+interface ClassInstance {
   id: string;
+  class_id: string;
+  date: string;
+  status: string;
   name: string;
   start_time: string;
   end_time: string;
-  day_of_week: number | null;
-  date: string | null;
-  is_recurring: boolean;
   teacher_id: string;
   teacher: {
     name: string;
+  };
+  location_id: string;
+  location: {
+    name: string;
+  };
+  class: {
+    studio_id: string;
+    is_recurring: boolean;
   };
   enrolledStudents?: string[];
 }
 
 export default function Classes() {
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingClass, setEditingClass] = useState<Class | null>(null);
-  const [selectedClass, setSelectedClass] = useState<Class | null>(null);
-  const [modifyingClass, setModifyingClass] = useState<{ class: Class; action: 'edit' | 'delete' } | null>(null);
+  const [editingClass, setEditingClass] = useState<ClassInstance | null>(null);
+  const [selectedClass, setSelectedClass] = useState<ClassInstance | null>(null);
+  const [modifyingClass, setModifyingClass] = useState<{ class: ClassInstance; action: 'edit' | 'delete' } | null>(null);
   const [pendingChanges, setPendingChanges] = useState<any>(null);
-  const { studioInfo, isLoading: dataLoading, initialized } = useData();
-  const { userRole, userId } = useAuth();
-  const [classes, setClasses] = useState<Class[]>([]);
+  const [classInstances, setClassInstances] = useState<ClassInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [queryInProgress, setQueryInProgress] = useState(false);
+  const { studioInfo, isLoading: dataLoading, initialized } = useData();
+  const { userRole, userId } = useAuth();
 
-  const fetchClasses = React.useCallback(async () => {
+  const fetchClassInstances = useCallback(async () => {
     if (!userRole || !userId || !initialized || queryInProgress) return;
-
+  
     try {
       setQueryInProgress(true);
       let query = supabase
-        .from('classes')
+        .from('class_instances')
         .select(`
           id,
+          class_id,
+          date,
+          status,
           name,
           start_time,
           end_time,
-          day_of_week,
-          date,
-          is_recurring,
           teacher_id,
           teacher:teachers (
             name
+          ),
+          location_id,
+          location:locations (
+            name
+          ),
+          class:classes (
+            studio_id,
+            is_recurring
           )
         `);
-
-      let studioId;
-
-      if (userRole === 'teacher') {
-        // Get teacher's ID first
-        const { data: teacherData } = await supabase
-          .from('teachers')
-          .select('id, studio_id')
-          .eq('user_id', userId)
-          .limit(1)
-          .single();
-
-        if (teacherData) {
-          studioId = teacherData.studio_id;
-          query = query.eq('teacher_id', teacherData.id);
-        } else {
-          console.error('No teacher record found for user');
-          setError('Teacher record not found');
-          return;
-        }
-      } else if (userRole === 'parent') {
-        // Get parent info and their students in a single query
-        const { data: parentData } = await supabase
+  
+      if (userRole === 'parent') {
+        const { data: parentInfo, error: parentError } = await supabase
           .from('parents')
           .select('id, studio_id')
           .eq('user_id', userId)
           .limit(1)
           .single();
-
-        if (parentData) {
-          query = query
-            .eq('studio_id', parentData.studio_id)
-            .order('name');
-            
-          const { data: classData, error: classError } = await query;
-          
-          if (classError) throw classError;
-          
-          // Get enrollment information for the parent's students
-          const enrichedClassData = await Promise.all((classData || []).map(async (classItem) => {
-            const students = await getEnrolledStudents(classItem.id, parentData.id);
-            return {
-              ...classItem,
-              enrolledStudents: students.map(s => s.name),
-            };
-          }));
-          
-          setClasses(enrichedClassData);
-          return;
-        } else {
-          console.error('No parent record found for user');
+  
+        if (parentError || !parentInfo) {
+          console.error('No parent record found for user', parentError);
           setError('Parent record not found');
           return;
         }
-      } else {
-        if (!studioInfo?.id) {
-          setError('Loading studio information...');
-          return;
-        }
-        studioId = studioInfo.id;
+  
+        query = query.eq('class.studio_id', parentInfo.studio_id);
       }
-
-      const { data, error: fetchError } = await query
-        .eq('studio_id', studioId)
-        .order('name');
-
-      if (fetchError) throw fetchError;
-      setClasses(data || []);
+  
+      const { data, error } = await query.order('date', { ascending: true });
+  
+      if (error) throw error;
+  
+      setClassInstances(data || []);
     } catch (err) {
-      console.error('Error fetching classes:', err);
+      console.error('Error fetching class_instances:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch classes');
     } finally {
       setQueryInProgress(false);
       setLoading(false);
     }
-  }, [userRole, userId, initialized, studioInfo?.id]);
+  }, [userRole, userId, initialized, queryInProgress]);  
 
-  React.useEffect(() => {
-    fetchClasses();
-  }, [fetchClasses]);
+  // **useEffect to Fetch Data on Component Mount or Dependencies Change**
+  useEffect(() => {
+    console.log("Fetching class instances...");
+    fetchClassInstances();
+  }, [fetchClassInstances]);
 
-  const handleDelete = async (classItem: Class) => {
-    if (classItem.is_recurring) {
+  // **Handle Delete Operations**
+  
+  const handleDelete = async (classItem: ClassInstance) => {
+    if (classItem.class.is_recurring) {
       setModifyingClass({ class: classItem, action: 'delete' });
     } else if (window.confirm('Are you sure you want to delete this class?')) {
       await deleteClass(classItem.id);
@@ -150,100 +128,121 @@ export default function Classes() {
   const deleteClass = async (classId: string) => {
     try {
       const { error: deleteError } = await supabase
-        .from('classes')
+        .from('class_instances')
         .delete()
         .eq('id', classId);
 
       if (deleteError) throw deleteError;
 
-      // Update local state
-      setClasses(prevClasses => prevClasses.filter(c => c.id !== classId));
+      // **Update Local State**
+      setClassInstances(prevClasses => prevClasses.filter(c => c.id !== classId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete class');
     }
   };
 
-  const handleEdit = (classItem: Class) => {
-    if (classItem.is_recurring) {
-      setModifyingClass({
-        class: classItem,
-        action: 'edit'
-      });
+  // **Handle Edit Operations**
+  
+  const handleEdit = (classItem: ClassInstance) => {
+    if (classItem.class.is_recurring) {
+      // Avoid setting state if the same class is already being modified
+      if (
+        modifyingClass?.class.id !== classItem.id ||
+        modifyingClass?.action !== 'edit'
+      ) {
+        setModifyingClass({
+          class: classItem,
+          action: 'edit',
+        });
+      }
     } else {
-      setEditingClass({ ...classItem, modificationScope: 'single' });
+      // Avoid setting state if the same class is already being edited
+      if (editingClass?.id !== classItem.id) {
+        setEditingClass(classItem);
+      }
     }
-  };
+  };  
 
-  const handleSaveChanges = (classItem: Class, changes: any) => {
-    if (classItem.is_recurring) {
+  const handleSaveChanges = (classItem: ClassInstance, changes: any) => {
+    if (classItem.class.is_recurring) {
       setPendingChanges(changes);
       setModifyingClass({
         class: classItem,
         action: 'edit'
       });
     } else {
-      // For non-recurring classes, save directly
-      setEditingClass({ ...classItem, modificationScope: 'single' });
+      // **For Non-Recurring Classes, Save Directly**
+      setEditingClass(classItem);
     }
   };
 
   const handleModifyConfirm = async (scope: 'single' | 'future' | 'all') => {
     if (!modifyingClass) return;
-
+  
     const { class: classItem, action } = modifyingClass;
-
-    if (action === 'delete') {
-      // Handle deletion based on scope
-      try {
+  
+    try {
+      if (action === 'delete') {
+        // Handle delete logic
         if (scope === 'single') {
-          // Delete specific instance
+          // Delete only the selected instance
           const { error } = await supabase
             .from('class_instances')
             .delete()
-            .eq('class_id', classItem.id)
-            .eq('date', classItem.date);
-
+            .eq('id', classItem.id);
+  
           if (error) throw error;
         } else if (scope === 'future') {
           // Delete this and future instances
           const { error } = await supabase
             .from('class_instances')
             .delete()
-            .eq('class_id', classItem.id)
+            .eq('class_id', classItem.class_id)
             .gte('date', classItem.date);
-
+  
           if (error) throw error;
-        } else {
-          // Delete all instances and the class itself
-          await deleteClass(classItem.id);
+        } else if (scope === 'all') {
+          // Delete all instances
+          const { error } = await supabase
+            .from('class_instances')
+            .delete()
+            .eq('class_id', classItem.class_id);
+  
+          if (error) throw error;
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to delete class');
+      } else if (action === 'edit') {
+        // Handle edit logic
+        if (scope === 'single') {
+          // Update only the selected instance
+          setEditingClass({ ...classItem, modificationScope: 'single' });
+        } else if (scope === 'future') {
+          // Update this and future instances
+          setEditingClass({ ...classItem, modificationScope: 'future' });
+        } else if (scope === 'all') {
+          // Update all instances
+          setEditingClass({ ...classItem, modificationScope: 'all' });
+        }
       }
-    } else {
-      // Apply the pending changes with the selected scope
-      const modifiedClass = {
-        ...classItem,
-        modificationScope: scope
-      };
-
-      setEditingClass(modifiedClass);
+  
+      // Refresh class instances after modification
+      fetchClassInstances();
+    } catch (err) {
+      console.error(`Error handling ${scope} ${action}:`, err);
+      setError(err instanceof Error ? err.message : `Failed to ${action} ${scope} instances`);
+    } finally {
       setModifyingClass(null);
     }
+  };  
 
-    if (action === 'delete') {
-      setPendingChanges(null);
-      fetchClasses();
-    }
-  };
-
-  const formatSchedule = (classItem: Class) => {
+  // **Utility Functions for Formatting**
+  
+  const formatSchedule = (classItem: ClassInstance) => {
     const timeStr = `${formatTime(classItem.start_time)} - ${formatTime(classItem.end_time)}`;
-    if (classItem.is_recurring) {
+    if (classItem.class.is_recurring) {
       const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      return `${days[classItem.day_of_week!]} ${timeStr}`;
+      return `${days[new Date(classItem.date).getDay()]} ${timeStr}`;
     }
-    return `${new Date(classItem.date!).toLocaleDateString()} ${timeStr}`;
+    return `${new Date(classItem.date).toLocaleDateString()} ${timeStr}`;
   };
 
   const formatTime = (time: string) => {
@@ -253,6 +252,8 @@ export default function Classes() {
     });
   };
 
+  // **Conditional Rendering Based on Loading and Error States**
+  
   if (loading || dataLoading) {
     return (
       <div>
@@ -279,8 +280,11 @@ export default function Classes() {
     return <div className="text-red-500">Error: {error}</div>;
   }
 
+  // **Main Render Function**
+  
   return (
     <div>
+      {/* **Header Section** */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-brand-primary">Classes</h1>
         {userRole === 'owner' && <button
@@ -292,29 +296,34 @@ export default function Classes() {
         </button>}
       </div>
       
+      {/* **Add Class Form Modal** */}
       {showAddForm && (
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <h2 className="text-lg font-semibold text-brand-primary mb-4">Add New Class</h2>
           <AddClassForm
             onSuccess={() => {
               setShowAddForm(false);
-              // Refresh classes
-              fetchClasses();
+              // **Refresh Classes After Adding**
+              fetchClassInstances();
             }}
             onCancel={() => setShowAddForm(false)}
           />
         </div>
       )}
 
+      {/* **Edit Class Form Modal** */}
       {editingClass && (
         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
           <h2 className="text-lg font-semibold text-brand-primary mb-4">Edit Class</h2>
+
+          {console.log('Editing class data being passed to EditClassForm:', editingClass)}
+
           <EditClassForm
             classData={editingClass}
             onSuccess={() => {
               setPendingChanges(null);
               setEditingClass(null);
-              fetchClasses();
+              fetchClassInstances();
             }}
             onCancel={() => {
               setPendingChanges(null);
@@ -325,17 +334,18 @@ export default function Classes() {
         </div>
       )}
 
-      <WeeklyCalendar
-        classes={classes}
-        onClassClick={setSelectedClass}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        userRole={userRole}
-      />
-      
+<WeeklyCalendar
+  classes={classInstances}
+  onClassClick={setSelectedClass}
+  onEdit={(classItem) => setModifyingClass({ class: classItem, action: 'edit' })}
+  onDelete={(classItem) => setModifyingClass({ class: classItem, action: 'delete' })}
+  userRole={userRole}
+/>
+
+      {/* **Attendance Modal** */}
       {selectedClass && (
         <AttendanceModal
-          classId={selectedClass.id}
+          classId={selectedClass.class_id}
           userRole={userRole}
           className={selectedClass.name}
           date={selectedClass.date}
@@ -344,14 +354,15 @@ export default function Classes() {
       )}
       
       {modifyingClass && (
-        <RecurringClassModal
-          action={modifyingClass.action}
-          onClose={() => setModifyingClass(null)}
-          onConfirm={handleModifyConfirm}
-        />
-      )}
+  <RecurringClassModal
+    action={modifyingClass.action}
+    onClose={() => setModifyingClass(null)}
+    onConfirm={(scope) => handleModifyConfirm(scope)} // Pass the scope to the handler
+  />
+)}
       
-      {classes.length === 0 && !loading && (
+      {/* **No Classes Found Message** */}
+      {classInstances.length === 0 && !loading && (
         <p className="text-center text-gray-500 mt-8">No classes found</p>
       )}
     </div>

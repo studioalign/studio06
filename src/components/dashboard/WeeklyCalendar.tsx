@@ -1,67 +1,71 @@
-import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Edit2, Trash2 } from 'lucide-react';
+import React, { useState, useCallback, useMemo } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { addWeeks, subWeeks, startOfWeek, addDays, format, isSameDay } from 'date-fns';
+import { Edit2, Trash2 } from 'lucide-react';
 
-interface Class {
+interface ClassInstance {
   id: string;
-  name: string;
+  class_id: string;
+  date: string;
+  is_recurring: boolean;
+  status: string;
+  name: string | null;
   start_time: string;
   end_time: string;
-  day_of_week: number | null;
-  date: string | null;
-  is_recurring: boolean;
+  teacher_id: string | null;
   teacher: {
-    name: string;
-  };
+    name: string | null;
+  } | null;
+  location_id: string | null;
+  location: {
+    name: string | null;
+  } | null;
   enrolledStudents?: string[];
 }
 
 interface WeeklyCalendarProps {
-  classes: Class[];
-  onClassClick: (classItem: Class) => void;
-  onEdit?: (classItem: Class) => void;
-  onDelete?: (classItem: Class, date: string) => void;
+  classes: ClassInstance[];
+  onClassClick: (classItem: ClassInstance) => void;
+  onEdit?: (classItem: ClassInstance) => void;
+  onDelete?: (classItem: ClassInstance) => void;
   userRole: string | null;
 }
 
 export default function WeeklyCalendar({ classes, onClassClick, onEdit, onDelete, userRole }: WeeklyCalendarProps) {
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+  const weekStart = useMemo(() => startOfWeek(currentDate, { weekStartsOn: 1 }), [currentDate]);
 
-  const formatTime = React.useCallback((time: string) => {
+  const formatTime = useCallback((time: string) => {
     return format(new Date(`2000-01-01T${time}`), 'h:mm a');
   }, []);
 
-  const getClassesForDay = React.useCallback((date: Date) => {
-    const dayOfWeek = date.getDay();
-    const dateStr = format(date, 'yyyy-MM-dd');
-    const modifiedClasses: Class[] = [];
+  const getClassesForDay = useCallback(
+    (date: Date) => {
+      const dateStr = format(date, 'yyyy-MM-dd');
+      return classes.filter(classItem => classItem.date === dateStr);
+    },
+    [classes]
+  );
 
-    classes.forEach(classItem => {
-      if (classItem.is_recurring) {
-        if (classItem.day_of_week === dayOfWeek) {
-          // Check for modifications
-          const modifiedClass = {
-            ...classItem,
-            date: dateStr
-          };
-          modifiedClasses.push(modifiedClass);
-        }
-      }
-      else if (classItem.date === dateStr) {
-        modifiedClasses.push(classItem);
-      }
-    });
-    return modifiedClasses;
-  }, [classes]);
-
-  const handlePrevWeek = () => {
+  const handlePrevWeek = useCallback(() => {
     setCurrentDate(subWeeks(currentDate, 1));
-  };
+  }, [currentDate]);
 
-  const handleNextWeek = () => {
+  const handleNextWeek = useCallback(() => {
     setCurrentDate(addWeeks(currentDate, 1));
-  };
+  }, [currentDate]);
+
+  const memoizedDays = useMemo(
+    () =>
+      Array.from({ length: 7 }).map((_, index) => {
+        const day = addDays(weekStart, index);
+        const dayClasses = getClassesForDay(day);
+        const isToday = isSameDay(day, new Date());
+
+        return { day, dayClasses, isToday };
+      }),
+    [weekStart, getClassesForDay]
+  );
 
   return (
     <div className="bg-white rounded-lg shadow">
@@ -84,95 +88,84 @@ export default function WeeklyCalendar({ classes, onClassClick, onEdit, onDelete
       </div>
 
       <div className="divide-y">
-        {Array.from({ length: 7 }).map((_, index) => {
-          const day = addDays(weekStart, index);
-          const dayClasses = getClassesForDay(day);
-          const isToday = isSameDay(day, new Date());
-
-          return (
-            <div key={index} className="p-4">
-              <h3 className={`font-medium mb-2 ${
+        {memoizedDays.map(({ day, dayClasses, isToday }, index) => (
+          <div key={index} className="p-4">
+            <h3
+              className={`font-medium mb-2 ${
                 isToday ? 'text-brand-primary' : 'text-gray-900'
-              }`}>
-                {format(day, 'EEEE, MMMM d')}
-                {isToday && <span className="ml-2 text-brand-accent">(Today)</span>}
-              </h3>
-              <div className="space-y-2">
-                {dayClasses.length > 0 ? (
-                  dayClasses.map(classItem => (
-                    <div
-                      key={classItem.id}
-                      className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"
-                      onClick={(e) => {
-                        // Prevent click when clicking action buttons
-                        if (!(e.target as HTMLElement).closest('button')) {
-                          onClassClick({
-                            ...classItem,
-                            date: format(day, 'yyyy-MM-dd')
-                          });
-                        }
-                      }}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="font-medium text-brand-primary">
-                            {classItem.name}
-                          </h4>
-                          <p className="text-sm text-brand-secondary-400">
-                            {formatTime(classItem.start_time)} - {formatTime(classItem.end_time)}
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            Teacher: {classItem.teacher.name}
-                          </p>
-                          {userRole === 'parent' && classItem.enrolledStudents && (
-                            <p className="text-sm text-gray-600 mt-1">
-                              {classItem.enrolledStudents.length > 0 
-                                ? `Enrolled: ${classItem.enrolledStudents.join(', ')}`
-                                : 'Not enrolled'}
-                            </p>
-                          )}
-                          {userRole === 'owner' && (
-                            <div className="flex space-x-2 mt-2">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onEdit?.({
-                                    ...classItem, 
-                                    date: format(day, 'yyyy-MM-dd'),
-                                    is_recurring: classItem.is_recurring
-                                  });
-                                }}
-                                className="p-1 text-gray-400 hover:text-brand-primary transition-colors"
-                                title="Edit class"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onDelete?.({
-                                    ...classItem,
-                                    date: format(day, 'yyyy-MM-dd')
-                                  });
-                                }}
-                                className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                                title="Delete class"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
+              }`}
+            >
+              {format(day, 'EEEE, MMMM d')}
+              {isToday && <span className="ml-2 text-brand-accent">(Today)</span>}
+            </h3>
+            <div className="space-y-2">
+              {dayClasses.length > 0 ? (
+                dayClasses.map(classItem => (
+                  <div
+                    key={classItem.id}
+                    className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"
+                    onClick={(e) => {
+                      if (!(e.target as HTMLElement).closest('button')) {
+                        onClassClick(classItem);
+                      }
+                    }}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="font-medium text-brand-primary">
+                          {classItem.name || 'Unnamed Class'}
+                        </h4>
+                        <p className="text-sm text-brand-secondary-400">
+                          {formatTime(classItem.start_time)} - {formatTime(classItem.end_time)}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          Teacher: {classItem.teacher?.name || 'Unknown Teacher'}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          Location: {classItem.location?.name || 'Unknown Location'}
+                        </p>
+                        {userRole === 'parent' && (
+  <p className="text-sm text-gray-600 mt-1">
+    {classItem.enrolledStudents?.length > 0
+      ? `Enrolled: ${classItem.enrolledStudents.join(', ')}`
+      : 'Not enrolled'}
+  </p>
+)}
+
+                        {userRole === 'owner' && (
+                          <div className="flex space-x-2 mt-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEdit?.(classItem);
+                              }}
+                              className="p-1 text-gray-400 hover:text-brand-primary transition-colors"
+                              title="Edit class"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete?.(classItem);
+                              }}
+                              className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                              title="Delete class"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-gray-500 py-2">No classes scheduled</p>
-                )}
-              </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500 py-2">No classes scheduled</p>
+              )}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
     </div>
   );
