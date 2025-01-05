@@ -35,6 +35,7 @@ interface Student {
 
 interface AttendanceModalProps {
   classId: string;
+  instanceId: string;
   userRole: string | null;
   className: string;
   date: string;
@@ -48,12 +49,11 @@ const statusOptions = [
   { value: 'unauthorised', label: 'Unauthorised Absence', color: 'bg-red-100 text-red-800' },
 ];
 
-export default function AttendanceModal({ classId, userRole, className, date, onClose }: AttendanceModalProps) {
+export default function AttendanceModal({ classId, instanceId, userRole, className, date, onClose }: AttendanceModalProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [classInstanceId, setClassInstanceId] = useState<string | null>(null);
 
   // Ensure we have a valid date
   const selectedDate = React.useMemo(() => {
@@ -66,10 +66,6 @@ export default function AttendanceModal({ classId, userRole, className, date, on
   useEffect(() => {
     async function fetchData() {
       try {
-        // Get or create class instance
-        const instanceId = await getOrCreateClassInstance(classId, selectedDate);
-        setClassInstanceId(instanceId);
-
         // Fetch instance enrollments
         let enrolled = await fetchInstanceStudents(instanceId);
 

@@ -1,5 +1,3 @@
-// classes.tsx
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit2, Trash2 } from 'lucide-react';
 import WeeklyCalendar from './WeeklyCalendar';
@@ -50,10 +48,23 @@ export default function Classes() {
   const { userRole, userId } = useAuth();
 
   const fetchClassInstances = useCallback(async () => {
-    if (!userRole || !userId || !initialized || queryInProgress) return;
+    if (!userRole || !userId || !initialized || queryInProgress || !studioInfo?.id) return;
   
     try {
       setQueryInProgress(true);
+      let parentId: string | null = null;
+
+      if (userRole === 'parent') {
+        const { data: parentData, error: parentError } = await supabase
+          .from('parents')
+          .select('id')
+          .eq('user_id', userId)
+          .single();
+
+        if (parentError) throw parentError;
+        parentId = parentData.id;
+      }
+
       let query = supabase
         .from('class_instances')
         .select(`
@@ -77,29 +88,30 @@ export default function Classes() {
             is_recurring
           )
         `);
-  
+
       if (userRole === 'parent') {
-        const { data: parentInfo, error: parentError } = await supabase
-          .from('parents')
-          .select('id, studio_id')
-          .eq('user_id', userId)
-          .limit(1)
-          .single();
-  
-        if (parentError || !parentInfo) {
-          console.error('No parent record found for user', parentError);
-          setError('Parent record not found');
-          return;
-        }
-  
-        query = query.eq('class.studio_id', parentInfo.studio_id);
+        query = query.eq('class.studio_id', studioInfo.id);
       }
-  
+
       const { data, error } = await query.order('date', { ascending: true });
-  
+
       if (error) throw error;
-  
-      setClassInstances(data || []);
+
+      // For parent users, fetch enrolled students for each class
+      if (userRole === 'parent' && parentId) {
+        const instancesWithEnrollments = await Promise.all(
+          (data || []).map(async (instance) => {
+            const students = await getEnrolledStudents(instance.class_id, parentId);
+            return {
+              ...instance,
+              enrolledStudents: students.map(s => s.name)
+            };
+          })
+        );
+        setClassInstances(instancesWithEnrollments);
+      } else {
+        setClassInstances(data || []);
+      }
     } catch (err) {
       console.error('Error fetching class_instances:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch classes');
@@ -107,11 +119,10 @@ export default function Classes() {
       setQueryInProgress(false);
       setLoading(false);
     }
-  }, [userRole, userId, initialized, queryInProgress]);  
+  }, [userRole, userId, initialized, studioInfo?.id]);  
 
   // **useEffect to Fetch Data on Component Mount or Dependencies Change**
   useEffect(() => {
-    console.log("Fetching class instances...");
     fetchClassInstances();
   }, [fetchClassInstances]);
 
@@ -346,6 +357,7 @@ export default function Classes() {
       {selectedClass && (
         <AttendanceModal
           classId={selectedClass.class_id}
+          instanceId={selectedClass.id}
           userRole={userRole}
           className={selectedClass.name}
           date={selectedClass.date}
