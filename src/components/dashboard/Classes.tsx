@@ -90,7 +90,10 @@ export default function Classes() {
         `);
 
       if (userRole === 'parent') {
-        query = query.eq('class.studio_id', studioInfo.id);
+        // For parents, filter by their studio but ensure we get all class details
+        query = query
+          .eq('class.studio_id', studioInfo.id)
+          .order('date', { ascending: true });
       }
 
       const { data, error } = await query.order('date', { ascending: true });

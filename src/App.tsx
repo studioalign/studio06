@@ -10,6 +10,7 @@ import Students from './components/dashboard/Students';
 import MessagesLayout from './components/messages/MessagesLayout';
 import Overview from './components/dashboard/Overview';
 import MyStudents from './components/dashboard/MyStudents';
+import ChannelLayout from './components/channels/ChannelLayout';
 import { AuthProvider } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
 import { MessagingProvider } from './contexts/MessagingContext';
@@ -43,6 +44,8 @@ const App = () => {
                 <Route element={<PrivateRoute requiredRole="owner,teacher,parent" />}>
                   <Route path="classes" element={<Classes />} />
                   <Route path="messages" element={<MessagesLayout />} />
+                  <Route path="channels" element={<ChannelLayout />} />
+                  <Route path="channels/:channelId" element={<ChannelLayout />} />
                 </Route>
                 <Route element={<PrivateRoute requiredRole="owner" />}>
                   <Route path="studio" element={<StudioInfo />} />
