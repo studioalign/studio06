@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Home, BookOpen, Building2, Users, GraduationCap, MessageSquare, Hash } from 'lucide-react';
+import { Home, BookOpen, Building2, Users, GraduationCap, MessageSquare, Hash, DollarSign, CreditCard, FileText, Wallet } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const ownerNavigation = [
@@ -11,6 +11,9 @@ const ownerNavigation = [
   { name: 'Studio Info', to: '/dashboard/studio', icon: Building2 },
   { name: 'Teachers', to: '/dashboard/teachers', icon: Users },
   { name: 'Students', to: '/dashboard/students', icon: GraduationCap },
+  { name: 'Payments', to: '/dashboard/payments', icon: DollarSign },
+  { name: 'Plans', to: '/dashboard/plans', icon: CreditCard },
+  { name: 'Invoices', to: '/dashboard/invoices', icon: FileText },
 ];
 
 const teacherNavigation = [

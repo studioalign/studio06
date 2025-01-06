@@ -7,6 +7,10 @@ import Classes from './components/dashboard/Classes';
 import StudioInfo from './components/dashboard/StudioInfo';
 import Teachers from './components/dashboard/Teachers';
 import Students from './components/dashboard/Students';
+import Payments from './components/payments/Payments';
+import Plans from './components/payments/Plans';
+import Invoices from './components/payments/Invoices';
+import PaymentMethods from './components/payments/PaymentMethods';
 import MessagesLayout from './components/messages/MessagesLayout';
 import Overview from './components/dashboard/Overview';
 import MyStudents from './components/dashboard/MyStudents';
@@ -51,6 +55,9 @@ const App = () => {
                   <Route path="studio" element={<StudioInfo />} />
                   <Route path="teachers" element={<Teachers />} />
                   <Route path="students" element={<Students />} />
+                  <Route path="payments" element={<Payments />} />
+                  <Route path="plans" element={<Plans />} />
+                  <Route path="invoices" element={<Invoices />} />
                 </Route>
                 <Route element={<PrivateRoute requiredRole="parent" />}>
                   <Route path="my-students" element={<MyStudents />} />
