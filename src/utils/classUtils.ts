@@ -5,6 +5,12 @@ interface Student {
   name: string;
 }
 
+/**
+ * Fetches students enrolled in a specific class for a given parent.
+ * @param classId - The UUID of the class.
+ * @param parentId - The UUID of the parent.
+ * @returns An array of Student objects.
+ */
 export async function getEnrolledStudents(classId: string, parentId: string): Promise<Student[]> {
   try {
     const { data, error } = await supabase
@@ -13,9 +19,17 @@ export async function getEnrolledStudents(classId: string, parentId: string): Pr
       .eq('class_id', classId)
       .eq('students.parent_id', parentId);
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error:', error.message);
+      throw error;
+    }
 
-    return (data || []).map(row => ({
+    if (!data) {
+      console.warn('No students found for the given class and parent.');
+      return [];
+    }
+
+    return data.map(row => ({
       id: row.student_id,
       name: row.students.name
     }));

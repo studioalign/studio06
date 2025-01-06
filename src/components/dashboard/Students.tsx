@@ -27,7 +27,9 @@ export default function Students() {
   useEffect(() => {
     async function fetchStudents() {
       try {
+        console.log('Fetching students...');
         if (!studioInfo?.id) {
+          console.error('No studio ID available');
           throw new Error('No studio ID available');
         }
 
@@ -37,16 +39,22 @@ export default function Students() {
             id,
             name,
             date_of_birth,
-            parent:parents (
+            parent:parents!students_parent_id_fkey (
               name
             )
           `)
-          .eq('studio_id', studioInfo?.id)
+          .eq('studio_id', studioInfo.id)
           .order('name');
 
-        if (fetchError) throw fetchError;
+        if (fetchError) {
+          console.error('Error fetching students:', fetchError);
+          throw fetchError;
+        }
+
+        console.log('Fetched Students Data:', data);
         setStudents(data || []);
       } catch (err) {
+        console.error('Error fetching students:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch students');
       } finally {
         setLoading(false);
@@ -54,7 +62,6 @@ export default function Students() {
     }
 
     if (studioInfo?.id) {
-      console.log('Fetching students for studio:', studioInfo.id);
       fetchStudents();
     }
   }, [studioInfo?.id]);

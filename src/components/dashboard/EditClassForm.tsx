@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Save } from 'lucide-react';
 import FormInput from '../FormInput';
 import SearchableDropdown from '../SearchableDropdown';
@@ -31,18 +31,30 @@ interface EditClassFormProps {
   onSaveClick: (changes: any) => void;
 }
 
-export default function EditClassForm({ classData, onSuccess, onCancel, onSaveClick }: EditClassFormProps) {
+export default function EditClassForm({
+  classData,
+  onSuccess,
+  onCancel,
+  onSaveClick,
+}: EditClassFormProps) {
   const { studioInfo, teachers, locations } = useData();
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<{ id: string; label: string }[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(true);
   const [name, setName] = useState(classData.name);
-  const [selectedRoom, setSelectedRoom] = useState<{ id: string; label: string } | null>(null);
+  const [selectedRoom, setSelectedRoom] = useState<{ id: string; label: string } | null>(
+    locations.find((loc) => loc.id === classData.location_id)
+      ? {
+          id: classData.location_id!,
+          label: locations.find((loc) => loc.id === classData.location_id)!.name,
+        }
+      : null
+  );
   const [selectedTeacher, setSelectedTeacher] = useState<{ id: string; label: string } | null>(
-    teachers.find(t => t.id === classData.teacher_id) 
-      ? { 
-          id: classData.teacher_id, 
-          label: teachers.find(t => t.id === classData.teacher_id)!.name 
+    teachers.find((t) => t.id === classData.teacher_id)
+      ? {
+          id: classData.teacher_id,
+          label: teachers.find((t) => t.id === classData.teacher_id)!.name,
         }
       : null
   );
@@ -53,6 +65,88 @@ export default function EditClassForm({ classData, onSuccess, onCancel, onSaveCl
   const [date, setDate] = useState(classData.date || '');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!studioInfo?.id || !classData?.id) return;
+  
+    async function fetchData() {
+      try {
+        console.log('Fetching class instance details for class ID:', classData.id);
+  
+        // Fetch class instance details to get location
+        const { data: instanceDetails, error: instanceError } = await supabase
+          .from('class_instances')
+          .select(`
+            location_id,
+            location:locations (
+              id,
+              name,
+              address
+            )
+          `)
+          .eq('id', classData.id)
+          .maybeSingle();
+  
+        if (instanceError) throw instanceError;
+  
+        if (instanceDetails?.location) {
+          setSelectedRoom({
+            id: instanceDetails.location.id,
+            label: instanceDetails.location.address
+              ? `${instanceDetails.location.name} (${instanceDetails.location.address})`
+              : instanceDetails.location.name,
+          });
+        } else {
+          console.warn('No location found for class instance ID:', classData.id);
+          setSelectedRoom(null); // Allow manual selection
+        }
+  
+        // Fetch all students in the studio
+        const { data: studentsData, error: studentsError } = await supabase
+          .from('students')
+          .select('id, name')
+          .eq('studio_id', studioInfo.id)
+          .order('name');
+  
+        if (studentsError) throw studentsError;
+        setStudents(studentsData || []);
+  
+        // Fetch enrolled students for this class instance
+        const { data: enrolledData, error: enrolledError } = await supabase
+          .from('instance_enrollments')
+          .select('student:students(id, name)')
+          .eq('class_instance_id', classData.id);
+  
+        if (enrolledError) throw enrolledError;
+  
+        if (enrolledData) {
+          setSelectedStudents(
+            enrolledData.map((enrollment) => ({
+              id: enrollment.student.id,
+              label: enrollment.student.name,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Error fetching data:', err);
+      } finally {
+        setLoadingStudents(false);
+      }
+    }
+  
+    fetchData();
+  }, [studioInfo?.id, classData?.id]);  
+  
+  const studentOptions = React.useMemo(
+    () => students.map((student) => ({ id: student.id, label: student.name })),
+    [students]
+  );
+
+  const logClasses = React.useCallback((date) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`Classes for date ${date}`);
+    }
+  }, []);  
 
   const validateForm = () => {
     if (!name || !startTime || !endTime) {
@@ -73,168 +167,162 @@ export default function EditClassForm({ classData, onSuccess, onCancel, onSaveCl
     return true;
   };
 
-  React.useEffect(() => {
-    async function fetchData() {
-      if (!studioInfo?.id) return;
-      
-      try {
-        // First fetch the class details to get the location
-        const { data: classDetails, error: classError } = await supabase
-          .from('classes')
-          .select(`
-            location_id,
-            location:locations (
-              id,
-              name,
-              address
-            )
-          `)
-          .eq('id', classData.id)
-          .single();
-
-        if (classError) throw classError;
-
-        if (classDetails?.location) {
-          setSelectedRoom({
-            id: classDetails.location.id,
-            label: classDetails.location.address 
-              ? `${classDetails.location.name} (${classDetails.location.address})`
-              : classDetails.location.name
-          });
-        }
-
-        // Fetch all students
-        const { data: studentsData, error: studentsError } = await supabase
-          .from('students')
-          .select('id, name')
-          .eq('studio_id', studioInfo.id)
-          .order('name');
-
-        if (studentsError) throw studentsError;
-        setStudents(studentsData || []);
-
-        // Fetch enrolled students
-        const { data: enrolledData, error: enrolledError } = await supabase
-          .from('class_students')
-          .select('student:students(id, name)')
-          .eq('class_id', classData.id);
-
-        if (enrolledError) throw enrolledError;
-        
-        if (enrolledData) {
-          setSelectedStudents(
-            enrolledData.map(enrollment => ({
-              id: enrollment.student.id,
-              label: enrollment.student.name,
-            }))
-          );
-        }
-      } catch (err) {
-        console.error('Error fetching data:', err);
-      } finally {
-        setLoadingStudents(false);
-      }
-    }
-
-    fetchData();
-  }, [studioInfo?.id, classData.id]);
-
   const handleSubmit = async () => {
-    if (!studioInfo?.id || !selectedTeacher) return;
-    
     setError(null);
     setIsSubmitting(true);
-    
+  
     try {
-      if (classData.modificationScope === 'single') {
-        // Update only this instance
-        const { error: updateError } = await supabase
-          .rpc('modify_class_instance', { 
-            p_class_id: classData.id, 
-            p_date: classData.date, 
-            p_name: name, 
-            p_teacher_id: selectedTeacher.id, 
-            p_location_id: selectedRoom?.id, 
-            p_start_time: startTime, 
-            p_end_time: endTime 
-          }); 
-
-        if (updateError) throw updateError;
-      } else if (classData.modificationScope === 'future') {
-        // Update this and future instances
-        const { error: updateError } = await supabase
-          .rpc('modify_future_class_instances', { 
-            p_class_id: classData.id, 
-            p_from_date: classData.date, 
-            p_name: name, 
-            p_teacher_id: selectedTeacher.id, 
-            p_location_id: selectedRoom?.id, 
-            p_start_time: startTime, 
-            p_end_time: endTime 
-          }); 
-
-        if (updateError) throw updateError;
-      } else {
-        // Update all instances
-        const { error: updateError } = await supabase
-          .from('classes')
-          .update({
-            name,
-            teacher_id: selectedTeacher.id,
-            location_id: selectedRoom?.id,
-            start_time: startTime,
-            end_time: endTime,
-            is_recurring: isRecurring,
-            day_of_week: isRecurring ? parseInt(dayOfWeek) : null,
-            date: !isRecurring ? date : null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', classData.id);
-
-        if (updateError) throw updateError;
-
+      console.log("Starting class update...");
+      console.log("Class data:", {
+        name,
+        teacher_id: selectedTeacher?.id,
+        location_id: selectedRoom?.id,
+        start_time: startTime,
+        end_time: endTime,
+        is_recurring: isRecurring,
+        day_of_week: isRecurring ? parseInt(dayOfWeek) : null,
+        date: !isRecurring ? date : null,
+      });
+  
+      // Step 1: Update class instance details
+      const { error: updateError } = await supabase
+        .from('class_instances')
+        .update({
+          name,
+          teacher_id: selectedTeacher?.id,
+          location_id: selectedRoom?.id,
+          start_time: startTime,
+          end_time: endTime,
+        })
+        .eq('id', classData.id);
+  
+      if (updateError) {
+        console.error("Error updating class details:", updateError);
+        throw updateError;
       }
-      
-      // Update enrolled students
-      // First, remove all existing enrollments
-      const { error: deleteError } = await supabase
-        .from('class_students')
-        .delete()
-        .eq('class_id', classData.id);
-
-      if (deleteError) throw deleteError;
-
-      // Then add new enrollments
-      if (selectedStudents.length > 0) {
-        const { error: enrollError } = await supabase
-          .from('class_students')
+  
+      console.log("Class instance updated successfully.");
+  
+      // Step 2: Fetch existing enrollments for this class instance
+      const { data: existingEnrollments, error: fetchEnrollmentsError } = await supabase
+        .from('instance_enrollments')
+        .select('student_id')
+        .eq('class_instance_id', classData.id);
+  
+      if (fetchEnrollmentsError) {
+        console.error("Error fetching existing enrollments:", fetchEnrollmentsError);
+        throw fetchEnrollmentsError;
+      }
+  
+      const existingEnrollmentIds = existingEnrollments?.map((enrollment) => enrollment.student_id) || [];
+  
+      // Step 3: Remove unenrolled students
+      const studentsToRemove = existingEnrollmentIds.filter(
+        (id) => !selectedStudents.some((student) => student.id === id)
+      );
+  
+      if (studentsToRemove.length > 0) {
+        console.log("Removing unenrolled students:", studentsToRemove);
+        const { error: deleteError } = await supabase
+          .from('instance_enrollments')
+          .delete()
+          .eq('class_instance_id', classData.id)
+          .in('student_id', studentsToRemove);
+  
+        if (deleteError) {
+          console.error("Error removing unenrolled students:", deleteError);
+          throw deleteError;
+        }
+      }
+  
+      // Step 4: Add new enrollments
+      const newEnrollments = selectedStudents.filter(
+        (student) => !existingEnrollmentIds.includes(student.id)
+      );
+  
+      if (newEnrollments.length > 0) {
+        console.log("Adding new enrollments:", newEnrollments);
+        const { error: insertError } = await supabase
+          .from('instance_enrollments')
           .insert(
-            selectedStudents.map(student => ({
-              class_id: classData.id,
+            newEnrollments.map((student) => ({
+              class_instance_id: classData.id,
               student_id: student.id,
             }))
           );
-
-        if (enrollError) throw enrollError;
+  
+        if (insertError) {
+          console.error("Error adding new enrollments:", insertError);
+          throw insertError;
+        }
       }
-
-      onSuccess(); 
+  
+      console.log("Enrollments updated successfully.");
+      onSuccess();
+      console.log("Class saved successfully.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update class');
+      console.error("Error saving class:", err);
+      setError(err instanceof Error ? err.message : "Failed to save class");
     } finally {
       setIsSubmitting(false);
     }
-  };
+  };  
 
-  const handleSaveClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
+  // Inside EditClassForm component, alongside existing functions
+const handleDeleteAllInstances = async () => {
+  try {
+    const { error } = await supabase
+      .from('class_instances')
+      .delete()
+      .eq('class_id', classData.id); // Use class_id to delete all instances
+
+    if (error) {
+      console.error('Error deleting all instances:', error);
+      throw error;
     }
 
-    handleSubmit();
-  };
+    console.log('All instances deleted successfully.');
+    onSuccess(); // Notify the parent component about the success
+  } catch (err) {
+    console.error('Error deleting all instances:', err);
+    setError(err instanceof Error ? err.message : 'Failed to delete all instances');
+  }
+};
+
+const handleEditInstances = async (modificationScope: 'all' | 'future') => {
+  try {
+    // Debug logs for tracing
+    console.log('Starting handleEditInstances...');
+    console.log('Modification Scope:', modificationScope);
+    console.log('Class ID:', classData.class_id);
+    console.log('Target Date:', classData.date);
+    console.log('ClassData passed to handleEditInstances:', classData);
+
+    // Call the Supabase RPC for bulk updates
+    const { error } = await supabase.rpc('bulk_update_class_instances', {
+      target_class_id: classData.class_id,
+      target_date: classData.date,
+      modification_scope: modificationScope,
+      updated_name: name,
+      updated_teacher_id: selectedTeacher?.id,
+      updated_location_id: selectedRoom?.id,
+      updated_start_time: startTime,
+      updated_end_time: endTime,
+    });
+
+    // Debug: Log the RPC result
+    if (error) {
+      console.error(`Error editing ${modificationScope} instances:`, error);
+      throw new Error(`Failed to edit ${modificationScope} instances: ${error.message}`);
+    }
+
+    console.log(`Successfully edited ${modificationScope} instances.`);
+    onSuccess(); // Notify parent component of success
+  } catch (err) {
+    console.error('Error in handleEditInstances:', err);
+    setError(err instanceof Error ? err.message : 'Failed to edit instances');
+  }
+};
 
   return (
     <form className="space-y-4">
@@ -252,7 +340,7 @@ export default function EditClassForm({ classData, onSuccess, onCancel, onSaveCl
         label="Select Teacher"
         value={selectedTeacher}
         onChange={setSelectedTeacher}
-        options={teachers.map(teacher => ({ id: teacher.id, label: teacher.name }))}
+        options={teachers.map((teacher) => ({ id: teacher.id, label: teacher.name }))}
       />
 
       <SearchableDropdown
@@ -260,9 +348,9 @@ export default function EditClassForm({ classData, onSuccess, onCancel, onSaveCl
         label="Select Room"
         value={selectedRoom}
         onChange={setSelectedRoom}
-        options={locations.map(location => ({ 
-          id: location.id, 
-          label: location.address ? `${location.name} (${location.address})` : location.name 
+        options={locations.map((location) => ({
+          id: location.id,
+          label: location.name,
         }))}
       />
 
@@ -275,7 +363,6 @@ export default function EditClassForm({ classData, onSuccess, onCancel, onSaveCl
           onChange={(e) => setStartTime(e.target.value)}
           required
         />
-
         <FormInput
           id="endTime"
           type="time"
@@ -286,15 +373,14 @@ export default function EditClassForm({ classData, onSuccess, onCancel, onSaveCl
         />
       </div>
 
-      <div className="flex items-center space-x-4">
+      <div>
         <label className="flex items-center">
           <input
             type="checkbox"
             checked={isRecurring}
             onChange={(e) => setIsRecurring(e.target.checked)}
-            className="rounded border-gray-300 text-brand-primary focus:ring-brand-accent"
           />
-          <span className="ml-2 text-sm text-gray-700">Recurring weekly class</span>
+          <span className="ml-2">Recurring Weekly Class</span>
         </label>
       </div>
 
@@ -302,10 +388,9 @@ export default function EditClassForm({ classData, onSuccess, onCancel, onSaveCl
         <select
           value={dayOfWeek}
           onChange={(e) => setDayOfWeek(e.target.value)}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
           required
         >
-          <option value="">Select day of week</option>
+          <option value="">Select Day</option>
           <option value="0">Sunday</option>
           <option value="1">Monday</option>
           <option value="2">Tuesday</option>
@@ -325,18 +410,20 @@ export default function EditClassForm({ classData, onSuccess, onCancel, onSaveCl
         />
       )}
 
-      <MultiSelectDropdown
-        id="students"
-        label="Select Students"
-        value={selectedStudents}
-        onChange={setSelectedStudents}
-        options={students.map(student => ({ id: student.id, label: student.name }))}
-        isLoading={loadingStudents}
-      />
+<MultiSelectDropdown
+  id="students"
+  label="Select Students"
+  value={selectedStudents}
+  onChange={setSelectedStudents}
+  options={students.map((student) => ({
+    id: student.id,
+    label: student.name,
+    disabled: selectedStudents.some((selected) => selected.id === student.id),
+  }))}
+  isLoading={loadingStudents}
+/>
 
-      {error && (
-        <p className="text-red-500 text-sm">{error}</p>
-      )}
+      {error && <p className="text-red-500">{error}</p>}
 
       <div className="flex justify-end space-x-3">
         <button
@@ -348,9 +435,12 @@ export default function EditClassForm({ classData, onSuccess, onCancel, onSaveCl
         </button>
         <button
           type="button"
-          onClick={handleSaveClick}
+          onClick={(e) => {
+            e.preventDefault();
+            if (validateForm()) handleSubmit();
+          }}
           disabled={isSubmitting}
-          className="flex items-center px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-secondary-400 disabled:bg-gray-400"
+          className="px-4 py-2 bg-brand-primary text-white rounded-md"
         >
           <Save className="w-4 h-4 mr-2" />
           Save Changes
