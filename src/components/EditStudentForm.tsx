@@ -1,37 +1,83 @@
 import React, { useState } from 'react';
-import { UserPlus } from 'lucide-react';
+import { Save } from 'lucide-react';
 import FormInput from './FormInput';
+import { supabase } from '../lib/supabase';
 
-interface AddStudentFormProps {
+interface Student {
+  id: string;
+  name: string;
+  date_of_birth: string;
+  gender: string;
+  emergencyContacts: {
+    name: string;
+    relationship: string;
+    phone: string;
+    email: string;
+  }[];
+  medicalConditions: string;
+  allergies: string;
+  medications: string;
+  doctorName: string;
+  doctorPhone: string;
+  photoConsent: boolean;
+  socialMediaConsent: boolean;
+  participationConsent: boolean;
+}
+
+interface EditStudentFormProps {
+  student: Student;
   onSuccess: () => void;
   onCancel: () => void;
 }
 
-export default function AddStudentForm({ onSuccess, onCancel }: AddStudentFormProps) {
-  // Basic Information
-  const [name, setName] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [gender, setGender] = useState('');
-
-  // Emergency Contacts
-  const [emergencyContacts, setEmergencyContacts] = useState([
-    { name: '', relationship: '', phone: '', email: '' }
-  ]);
-
-  // Medical Information
-  const [medicalConditions, setMedicalConditions] = useState('');
-  const [allergies, setAllergies] = useState('');
-  const [medications, setMedications] = useState('');
-  const [doctorName, setDoctorName] = useState('');
-  const [doctorPhone, setDoctorPhone] = useState('');
-
-  // Consents
-  const [photoConsent, setPhotoConsent] = useState(false);
-  const [socialMediaConsent, setSocialMediaConsent] = useState(false);
-  const [participationConsent, setParticipationConsent] = useState(false);
-
+export default function EditStudentForm({ student, onSuccess, onCancel }: EditStudentFormProps) {
+  const [name, setName] = useState(student.name);
+  const [dateOfBirth, setDateOfBirth] = useState(student.date_of_birth);
+  const [gender, setGender] = useState(student.gender);
+  const [emergencyContacts, setEmergencyContacts] = useState(student.emergencyContacts);
+  const [medicalConditions, setMedicalConditions] = useState(student.medicalConditions);
+  const [allergies, setAllergies] = useState(student.allergies);
+  const [medications, setMedications] = useState(student.medications);
+  const [doctorName, setDoctorName] = useState(student.doctorName);
+  const [doctorPhone, setDoctorPhone] = useState(student.doctorPhone);
+  const [photoConsent, setPhotoConsent] = useState(student.photoConsent);
+  const [socialMediaConsent, setSocialMediaConsent] = useState(student.socialMediaConsent);
+  const [participationConsent, setParticipationConsent] = useState(student.participationConsent);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const { error: updateError } = await supabase
+        .from('students')
+        .update({
+          name,
+          date_of_birth: dateOfBirth,
+          gender,
+          emergency_contacts: emergencyContacts,
+          medical_conditions: medicalConditions,
+          allergies,
+          medications,
+          doctor_name: doctorName,
+          doctor_phone: doctorPhone,
+          photo_consent: photoConsent,
+          social_media_consent: socialMediaConsent,
+          participation_consent: participationConsent,
+        })
+        .eq('id', student.id);
+
+      if (updateError) throw updateError;
+      onSuccess();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update student');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const addEmergencyContact = () => {
     setEmergencyContacts([
@@ -56,32 +102,16 @@ export default function AddStudentForm({ onSuccess, onCancel }: AddStudentFormPr
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setIsSubmitting(true);
-
-    try {
-      // Mock success - in real implementation, this would send data to backend
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      onSuccess();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to add student');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
-      {/* Basic Information Section */}
+      {/* Basic Information */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-brand-primary">Basic Information</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormInput
             id="name"
             type="text"
-            label="Student Name"
+            label="Full Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -96,25 +126,23 @@ export default function AddStudentForm({ onSuccess, onCancel }: AddStudentFormPr
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-brand-secondary-400 mb-1">
+          <label className="block text-sm font-medium text-brand-secondary-400">
             Gender
           </label>
           <select
             value={gender}
             onChange={(e) => setGender(e.target.value)}
             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
-            required
           >
-            <option value="">Select gender</option>
-            <option value="male">Male</option>
             <option value="female">Female</option>
+            <option value="male">Male</option>
             <option value="other">Other</option>
             <option value="prefer-not-to-say">Prefer not to say</option>
           </select>
         </div>
       </div>
 
-      {/* Emergency Contacts Section */}
+      {/* Emergency Contacts */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold text-brand-primary">Emergency Contacts</h3>
@@ -181,46 +209,46 @@ export default function AddStudentForm({ onSuccess, onCancel }: AddStudentFormPr
         ))}
       </div>
 
-      {/* Medical Information Section */}
+      {/* Medical Information */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-brand-primary">Medical Information</h3>
+        <div>
+          <label className="block text-sm font-medium text-brand-secondary-400">
+            Medical Conditions
+          </label>
+          <textarea
+            value={medicalConditions}
+            onChange={(e) => setMedicalConditions(e.target.value)}
+            rows={3}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
+            placeholder="Please list any medical conditions we should be aware of"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-brand-secondary-400">
+            Allergies
+          </label>
+          <textarea
+            value={allergies}
+            onChange={(e) => setAllergies(e.target.value)}
+            rows={2}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
+            placeholder="Please list any allergies"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-brand-secondary-400">
+            Current Medications
+          </label>
+          <textarea
+            value={medications}
+            onChange={(e) => setMedications(e.target.value)}
+            rows={2}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
+            placeholder="Please list any medications your child is currently taking"
+          />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-brand-secondary-400 mb-1">
-              Medical Conditions
-            </label>
-            <textarea
-              value={medicalConditions}
-              onChange={(e) => setMedicalConditions(e.target.value)}
-              rows={3}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
-              placeholder="Please list any medical conditions we should be aware of"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-brand-secondary-400 mb-1">
-              Allergies
-            </label>
-            <textarea
-              value={allergies}
-              onChange={(e) => setAllergies(e.target.value)}
-              rows={2}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
-              placeholder="Please list any allergies"
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-brand-secondary-400 mb-1">
-              Current Medications
-            </label>
-            <textarea
-              value={medications}
-              onChange={(e) => setMedications(e.target.value)}
-              rows={2}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
-              placeholder="Please list any medications your child is currently taking"
-            />
-          </div>
           <FormInput
             id="doctorName"
             type="text"
@@ -238,7 +266,7 @@ export default function AddStudentForm({ onSuccess, onCancel }: AddStudentFormPr
         </div>
       </div>
 
-      {/* Consents Section */}
+      {/* Consents */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-brand-primary">Consents</h3>
         <div className="space-y-4">
@@ -314,8 +342,8 @@ export default function AddStudentForm({ onSuccess, onCancel }: AddStudentFormPr
           disabled={isSubmitting || !participationConsent}
           className="flex items-center px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-secondary-400 disabled:bg-gray-400"
         >
-          <UserPlus className="w-4 h-4 mr-2" />
-          Add Student
+          <Save className="w-4 h-4 mr-2" />
+          Save Changes
         </button>
       </div>
     </form>

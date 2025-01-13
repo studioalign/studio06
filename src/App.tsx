@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import SignupForm from './components/SignupForm';
 import SigninForm from './components/SigninForm';
+import ForgotPasswordForm from './components/ForgotPasswordForm';
 import DashboardLayout from './components/dashboard/DashboardLayout';
 import Classes from './components/dashboard/Classes';
 import StudioInfo from './components/dashboard/StudioInfo';
@@ -15,16 +16,22 @@ import MessagesLayout from './components/messages/MessagesLayout';
 import Overview from './components/dashboard/Overview';
 import MyStudents from './components/dashboard/MyStudents';
 import ChannelLayout from './components/channels/ChannelLayout';
+import NotificationsPage from './components/notifications/NotificationsPage';
+import Profile from './components/settings/Profile';
+import Settings from './components/settings/Settings';
+import Billing from './components/settings/Billing';
 import { AuthProvider } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
 import { MessagingProvider } from './contexts/MessagingContext';
+import { LocalizationProvider } from './contexts/LocalizationContext';
 import PrivateRoute from './components/PrivateRoute';
 
 const App = () => {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <MessagingProvider>
+      <LocalizationProvider>
+        <BrowserRouter>
+          <MessagingProvider>
           <Routes>
             <Route
               path="/signup"
@@ -42,31 +49,107 @@ const App = () => {
                 </div>
               }
             />
-            <Route element={<DataProvider><PrivateRoute requiredRole="owner,teacher,parent" /></DataProvider>}>
-              <Route path="/dashboard" element={<DashboardLayout />}>
-                <Route index element={<Overview />} />
-                <Route element={<PrivateRoute requiredRole="owner,teacher,parent" />}>
-                  <Route path="classes" element={<Classes />} />
-                  <Route path="messages" element={<MessagesLayout />} />
-                  <Route path="channels" element={<ChannelLayout />} />
-                  <Route path="channels/:channelId" element={<ChannelLayout />} />
-                </Route>
-                <Route element={<PrivateRoute requiredRole="owner" />}>
-                  <Route path="studio" element={<StudioInfo />} />
-                  <Route path="teachers" element={<Teachers />} />
-                  <Route path="students" element={<Students />} />
-                  <Route path="payments" element={<Payments />} />
-                  <Route path="plans" element={<Plans />} />
-                  <Route path="invoices" element={<Invoices />} />
-                </Route>
-                <Route element={<PrivateRoute requiredRole="parent" />}>
-                  <Route path="my-students" element={<MyStudents />} />
-                </Route>
-              </Route>
+            <Route
+              path="/forgot-password"
+              element={
+                <div className="min-h-screen bg-gradient-to-br from-brand-secondary-400 to-brand-primary flex items-center justify-center p-4">
+                  <ForgotPasswordForm />
+                </div>
+              }
+            />
+            <Route
+              path="/dashboard"
+              element={
+                <PrivateRoute requiredRole="owner,teacher,parent">
+                  <DataProvider>
+                    <DashboardLayout />
+                  </DataProvider>
+                </PrivateRoute>
+              }
+            >
+              <Route index element={<Overview />} />
+              
+              {/* Common routes for all authenticated users */}
+              <Route path="classes" element={<Classes />} />
+              <Route path="messages" element={<MessagesLayout />} />
+              <Route path="channels" element={<ChannelLayout />} />
+              <Route path="channels/:channelId" element={<ChannelLayout />} />
+              <Route path="notifications" element={<NotificationsPage />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="settings" element={<Settings />} />
+
+              {/* Owner-only routes */}
+              <Route
+                path="studio"
+                element={
+                  <PrivateRoute requiredRole="owner">
+                    <StudioInfo />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="teachers"
+                element={
+                  <PrivateRoute requiredRole="owner">
+                    <Teachers />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="students"
+                element={
+                  <PrivateRoute requiredRole="owner">
+                    <Students />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="payments"
+                element={
+                  <PrivateRoute requiredRole="owner">
+                    <Payments />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="plans"
+                element={
+                  <PrivateRoute requiredRole="owner">
+                    <Plans />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="invoices"
+                element={
+                  <PrivateRoute requiredRole="owner">
+                    <Invoices />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="billing"
+                element={
+                  <PrivateRoute requiredRole="owner">
+                    <Billing />
+                  </PrivateRoute>
+                }
+              />
+
+              {/* Parent-only routes */}
+              <Route
+                path="my-students"
+                element={
+                  <PrivateRoute requiredRole="parent">
+                    <MyStudents />
+                  </PrivateRoute>
+                }
+              />
             </Route>
           </Routes>
         </MessagingProvider>
-      </BrowserRouter>
+        </BrowserRouter>
+      </LocalizationProvider>
     </AuthProvider>
   );
 }

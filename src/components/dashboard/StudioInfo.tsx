@@ -1,11 +1,53 @@
 import React, { useState, useEffect } from 'react';
-import { MapPin, Phone, Mail, Save, Plus } from 'lucide-react';
+import { MapPin, Phone, Mail, Save, Plus, Globe } from 'lucide-react';
 import FormField from '../FormField';
 import RoomCard from './RoomCard';
 import AddRoomForm from './AddRoomForm';
 import { supabase } from '../../lib/supabase';
 import type { StudioInfo as StudioInfoType } from '../../types/studio';
 import { useData } from '../../contexts/DataContext';
+import { useLocalization } from '../../contexts/LocalizationContext';
+
+const SUPPORTED_COUNTRIES = [
+  { code: 'GB', name: 'United Kingdom', currency: 'GBP' },
+  { code: 'IE', name: 'Ireland', currency: 'EUR' },
+  { code: 'US', name: 'United States', currency: 'USD' },
+  { code: 'CA', name: 'Canada', currency: 'CAD' },
+  { code: 'AU', name: 'Australia', currency: 'AUD' },
+  { code: 'NZ', name: 'New Zealand', currency: 'NZD' }
+];
+
+const TIMEZONE_LABELS: Record<string, string> = {
+  // UK & Ireland
+  'Europe/London': 'London (GMT/BST)',
+  'Europe/Dublin': 'Dublin (GMT/IST)',
+  // US
+  'America/New_York': 'Eastern Time (ET)',
+  'America/Chicago': 'Central Time (CT)',
+  'America/Denver': 'Mountain Time (MT)',
+  'America/Los_Angeles': 'Pacific Time (PT)',
+  'America/Phoenix': 'Arizona (MT - no DST)',
+  'America/Anchorage': 'Alaska Time (AKT)',
+  'Pacific/Honolulu': 'Hawaii Time (HST)',
+  // Canada
+  'America/Toronto': 'Eastern Time (ET)',
+  'America/Vancouver': 'Pacific Time (PT)',
+  'America/Edmonton': 'Mountain Time (MT)',
+  'America/Winnipeg': 'Central Time (CT)',
+  'America/Halifax': 'Atlantic Time (AT)',
+  'America/St_Johns': 'Newfoundland Time (NT)',
+  // Australia
+  'Australia/Sydney': 'Sydney (AEST/AEDT)',
+  'Australia/Melbourne': 'Melbourne (AEST/AEDT)',
+  'Australia/Brisbane': 'Brisbane (AEST)',
+  'Australia/Adelaide': 'Adelaide (ACST/ACDT)',
+  'Australia/Perth': 'Perth (AWST)',
+  'Australia/Darwin': 'Darwin (ACST)',
+  'Australia/Hobart': 'Hobart (AEST/AEDT)',
+  // New Zealand
+  'Pacific/Auckland': 'Auckland (NZST/NZDT)',
+  'Pacific/Chatham': 'Chatham Islands (CHAST/CHADT)'
+};
 
 interface Location {
   id: string;
@@ -18,7 +60,11 @@ export default function StudioInfo() {
   const [showAddRoom, setShowAddRoom] = useState(false);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(true);
+  const [country, setCountry] = useState('GB');
+  const [timezone, setTimezone] = useState('Europe/London');
+  const [dateFormat, setDateFormat] = useState('dd/MM/yyyy');
   const [localStudioInfo, setLocalStudioInfo] = useState<StudioInfoType | null>(null);
+  const { updateLocalization } = useLocalization();
 
   const { studioInfo, error, isLoading, refreshData } = useData();
 
@@ -89,12 +135,25 @@ export default function StudioInfo() {
           address: localStudioInfo.address,
           phone: localStudioInfo.contact.phone,
           email: localStudioInfo.contact.email,
+          country: country,
+          timezone: timezone,
           updated_at: new Date().toISOString(),
         })
         .eq('id', studioInfo.id)
         .eq('owner_id', ownerData.id);
 
       if (studioError) throw studioError;
+
+      // Update localization context
+      const selectedCountry = SUPPORTED_COUNTRIES.find(c => c.code === country);
+      if (selectedCountry) {
+        updateLocalization({
+          country,
+          timezone,
+          currency: selectedCountry.currency,
+          dateFormat
+        });
+      }
 
       setIsEditing(false);
       await refreshData();
@@ -209,6 +268,125 @@ export default function StudioInfo() {
               <div className="pl-7 space-y-2">
                 <p className="text-brand-secondary-400">{studioInfo.contact.phone}</p>
                 <p className="text-brand-secondary-400">{studioInfo.contact.email}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Localization Settings */}
+          <div>
+            <div className="flex items-center mb-4">
+              <Globe className="w-5 h-5 text-brand-accent mr-2" />
+              <h3 className="font-medium">Localization Settings</h3>
+            </div>
+            {isEditing ? (
+              <div className="space-y-4 pl-7">
+                <div>
+                  <label className="block text-sm font-medium text-brand-secondary-400 mb-1">
+                    Country
+                  </label>
+                  <select
+                    value={country}
+                    onChange={(e) => {
+                      setCountry(e.target.value);
+                      // Reset timezone when country changes
+                      const newCountry = SUPPORTED_COUNTRIES.find(c => c.code === e.target.value);
+                      if (newCountry) {
+                        switch (newCountry.code) {
+                          case 'GB':
+                            setTimezone('Europe/London');
+                            break;
+                          case 'IE':
+                            setTimezone('Europe/Dublin');
+                            break;
+                          case 'US':
+                            setTimezone('America/New_York');
+                            break;
+                          case 'CA':
+                            setTimezone('America/Toronto');
+                            break;
+                          case 'AU':
+                            setTimezone('Australia/Sydney');
+                            break;
+                          case 'NZ':
+                            setTimezone('Pacific/Auckland');
+                            break;
+                        }
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
+                  >
+                    {SUPPORTED_COUNTRIES.map(country => (
+                      <option key={country.code} value={country.code}>
+                        {country.name} ({country.currency})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-brand-secondary-400 mb-1">
+                    Timezone
+                  </label>
+                  <select
+                    value={timezone}
+                    onChange={(e) => setTimezone(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
+                  >
+                    {Object.entries(TIMEZONE_LABELS)
+                      .filter(([tz]) => {
+                        // Filter timezones based on selected country
+                        switch (country) {
+                          case 'GB':
+                            return tz === 'Europe/London';
+                          case 'IE':
+                            return tz === 'Europe/Dublin';
+                          case 'US':
+                            return tz.startsWith('America/') || tz === 'Pacific/Honolulu';
+                          case 'CA':
+                            return ['Toronto', 'Vancouver', 'Edmonton', 'Winnipeg', 'Halifax', 'St_Johns']
+                              .some(city => tz === `America/${city}`);
+                          case 'AU':
+                            return tz.startsWith('Australia/');
+                          case 'NZ':
+                            return tz.startsWith('Pacific/');
+                          default:
+                            return false;
+                        }
+                      })
+                      .map(([tz, label]) => (
+                        <option key={tz} value={tz}>
+                          {label}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-brand-secondary-400 mb-1">
+                    Date Format
+                  </label>
+                  <select
+                    value={dateFormat}
+                    onChange={(e) => setDateFormat(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
+                  >
+                    <option value="dd/MM/yyyy">DD/MM/YYYY (31/12/2024)</option>
+                    <option value="MM/dd/yyyy">MM/DD/YYYY (12/31/2024)</option>
+                    <option value="yyyy-MM-dd">YYYY-MM-DD (2024-12-31)</option>
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <div className="pl-7 space-y-2">
+                <p className="text-brand-secondary-400">
+                  Country: {SUPPORTED_COUNTRIES.find(c => c.code === country)?.name}
+                </p>
+                <p className="text-brand-secondary-400">
+                  Timezone: {TIMEZONE_LABELS[timezone]}
+                </p>
+                <p className="text-brand-secondary-400">
+                  Currency: {SUPPORTED_COUNTRIES.find(c => c.code === country)?.currency}
+                </p>
               </div>
             )}
           </div>

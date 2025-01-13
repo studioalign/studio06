@@ -29,6 +29,9 @@ export default function AddClassForm({ onSuccess, onCancel }: AddClassFormProps)
   const [dayOfWeek, setDayOfWeek] = useState<string>('');
   const [date, setDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [isDropIn, setIsDropIn] = useState(false);
+  const [capacity, setCapacity] = useState('');
+  const [dropInPrice, setDropInPrice] = useState('');
   const [selectedStudents, setSelectedStudents] = useState<{ id: string; label: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -97,6 +100,9 @@ export default function AddClassForm({ onSuccess, onCancel }: AddClassFormProps)
             date: !isRecurring ? date : null,
             end_date: isRecurring ? endDate : date, // For recurring classes use endDate, for one-off use date
             location_id: selectedRoom.id,
+            is_drop_in: isDropIn,
+            capacity: isDropIn ? parseInt(capacity) : null,
+            drop_in_price: isDropIn ? parseFloat(dropInPrice) : null,
           },
         ])
         .select()
@@ -228,14 +234,56 @@ export default function AddClassForm({ onSuccess, onCancel }: AddClassFormProps)
         />
       )}
 
-      <MultiSelectDropdown
-        id="students"
-        label="Select Students"
-        value={selectedStudents}
-        onChange={setSelectedStudents}
-        options={students.map(student => ({ id: student.id, label: student.name }))}
-        isLoading={loadingStudents}
-      />
+      {/* Drop-in Class Options */}
+      <div className="space-y-4">
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            id="isDropIn"
+            checked={isDropIn}
+            onChange={(e) => setIsDropIn(e.target.checked)}
+            className="h-4 w-4 text-brand-primary border-gray-300 rounded focus:ring-brand-accent"
+          />
+          <label htmlFor="isDropIn" className="text-sm font-medium text-gray-700">
+            This is a drop-in class
+          </label>
+        </div>
+
+        {isDropIn && (
+          <div className="grid grid-cols-2 gap-4 pl-6">
+            <FormInput
+              id="capacity"
+              type="number"
+              label="Class Capacity"
+              value={capacity}
+              onChange={(e) => setCapacity(e.target.value)}
+              min="1"
+              required={isDropIn}
+            />
+            <FormInput
+              id="dropInPrice"
+              type="number"
+              label="Drop-in Price"
+              value={dropInPrice}
+              onChange={(e) => setDropInPrice(e.target.value)}
+              min="0"
+              step="0.01"
+              required={isDropIn}
+            />
+          </div>
+        )}
+      </div>
+
+      {!isDropIn && (
+        <MultiSelectDropdown
+          id="students"
+          label="Select Students"
+          value={selectedStudents}
+          onChange={setSelectedStudents}
+          options={students.map(student => ({ id: student.id, label: student.name }))}
+          isLoading={loadingStudents}
+        />
+      )}
 
       {error && (
         <p className="text-red-500 text-sm">{error}</p>

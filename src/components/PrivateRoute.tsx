@@ -1,12 +1,15 @@
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 interface PrivateRouteProps {
   requiredRole?: string;
+  children: React.ReactNode;
 }
 
-export default function PrivateRoute({ requiredRole }: PrivateRouteProps) {
+export default function PrivateRoute({ requiredRole, children }: PrivateRouteProps) {
   const { isAuthenticated, userRole } = useAuth();
+
+  console.log('PrivateRoute:', { isAuthenticated, userRole, requiredRole }); // Add debugging
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace />;
@@ -19,5 +22,5 @@ export default function PrivateRoute({ requiredRole }: PrivateRouteProps) {
     }
   }
 
-  return <Outlet />;
+  return children;
 }

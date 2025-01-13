@@ -8,6 +8,10 @@ interface ClassInstance {
   class_id: string;
   date: string;
   is_recurring: boolean;
+  is_drop_in: boolean;
+  capacity: number | null;
+  drop_in_price: number | null;
+  booked_count: number;
   status: string;
   name: string | null;
   start_time: string;
@@ -28,6 +32,7 @@ interface WeeklyCalendarProps {
   onClassClick: (classItem: ClassInstance) => void;
   onEdit?: (classItem: ClassInstance) => void;
   onDelete?: (classItem: ClassInstance) => void;
+  onBookDropIn?: (classItem: ClassInstance) => void;
   userRole: string | null;
 }
 
@@ -124,6 +129,20 @@ export default function WeeklyCalendar({ classes, onClassClick, onEdit, onDelete
                         <p className="text-sm text-gray-600">
                           Location: {classItem.location?.name || 'Unknown Location'}
                         </p>
+                        {classItem.is_drop_in && (
+                          <div className="mt-2 flex items-center justify-between">
+                            <span className="text-brand-primary font-medium">
+                              ${classItem.drop_in_price?.toFixed(2)} per class
+                            </span>
+                            <span className={`text-sm ${
+                              (classItem.capacity! - classItem.booked_count) <= 3 
+                                ? 'text-red-600' 
+                                : 'text-gray-600'
+                            }`}>
+                              {classItem.capacity! - classItem.booked_count} spots left
+                            </span>
+                          </div>
+                        )}
                         {userRole === 'parent' && (
   <p className="text-sm text-gray-600 mt-1">
     {classItem.enrolledStudents?.length > 0
@@ -133,31 +152,53 @@ export default function WeeklyCalendar({ classes, onClassClick, onEdit, onDelete
 )}
 
                         {userRole === 'owner' && (
-                          <div className="flex space-x-2 mt-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onEdit?.(classItem);
-                              }}
-                              className="p-1 text-gray-400 hover:text-brand-primary transition-colors"
-                              title="Edit class"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDelete?.(classItem);
-                              }}
-                              className="p-1 text-gray-400 hover:text-red-500 transition-colors"
-                              title="Delete class"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
+  <div className="flex space-x-2 mt-2">
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onEdit?.(classItem);
+      }}
+      className="p-1 text-gray-400 hover:text-brand-primary transition-colors"
+      title="Edit class"
+    >
+      <Edit2 className="w-4 h-4" />
+    </button>
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onDelete?.(classItem);
+      }}
+      className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+      title="Delete class"
+    >
+      <Trash2 className="w-4 h-4" />
+    </button>
+  </div>
+)}
                       </div>
                     </div>
+                    {userRole === 'parent' && (
+                      <div className="mt-2">
+                        {classItem.enrolledStudents?.length > 0 ? (
+                          <p className="text-sm text-gray-600">
+                            Enrolled: {classItem.enrolledStudents.join(', ')}
+                          </p>
+                        ) : classItem.is_drop_in ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onBookDropIn?.(classItem);
+                            }}
+                            disabled={classItem.capacity! <= classItem.booked_count}
+                            className="w-full mt-2 px-3 py-1.5 bg-brand-primary text-white text-sm rounded hover:bg-brand-secondary-400 disabled:bg-gray-400"
+                          >
+                            Book Drop-in Class
+                          </button>
+                        ) : (
+                          <p className="text-sm text-gray-600">Not enrolled</p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))
               ) : (

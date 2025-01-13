@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CreditCard, RefreshCw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useLocalization } from '../../contexts/LocalizationContext';
 import { formatCurrency } from '../../utils/formatters';
 import RefundModal from './RefundModal';
 
@@ -26,6 +27,7 @@ interface PaymentHistoryProps {
 }
 
 export default function PaymentHistory({ invoiceId, onRefresh }: PaymentHistoryProps) {
+  const { currency } = useLocalization();
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +113,7 @@ export default function PaymentHistory({ invoiceId, onRefresh }: PaymentHistoryP
                   <CreditCard className="w-5 h-5 text-brand-primary mr-2" />
                   <div>
                     <p className="font-medium">
-                      {formatPaymentMethod(payment.payment_method)}
+                      {formatCurrency(payment.amount, currency)}
                     </p>
                     <p className="text-sm text-gray-500">
                       {new Date(payment.payment_date).toLocaleDateString()}

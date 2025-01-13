@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, CreditCard } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { useLocalization } from '../../contexts/LocalizationContext';
 import { formatCurrency } from '../../utils/formatters';
 import FormInput from '../FormInput';
 
@@ -17,6 +18,7 @@ interface ProcessPaymentModalProps {
 }
 
 export default function ProcessPaymentModal({ invoice, onClose, onSuccess }: ProcessPaymentModalProps) {
+  const { currency } = useLocalization();
   const [amount, setAmount] = useState(invoice.total.toString());
   const [paymentMethod, setPaymentMethod] = useState('card');
   const [transactionId, setTransactionId] = useState('');
