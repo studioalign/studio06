@@ -1,15 +1,15 @@
-// classes.tsx
-
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, Edit2, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, X } from 'lucide-react';
 import WeeklyCalendar from './WeeklyCalendar';
 import AddClassForm from './AddClassForm';
 import EditClassForm from './EditClassForm';
+import BookDropInModal from './BookDropInModal';
 import AttendanceModal from './AttendanceModal';
 import RecurringClassModal from './RecurringClassModal';
 import { supabase } from '../../lib/supabase';
 import { useData } from '../../contexts/DataContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLocalization } from '../../contexts/LocalizationContext';
 import { getEnrolledStudents } from '../../utils/classUtils';
 import { addDays, format } from 'date-fns';
 
@@ -42,18 +42,33 @@ export default function Classes() {
   const [selectedClass, setSelectedClass] = useState<ClassInstance | null>(null);
   const [modifyingClass, setModifyingClass] = useState<{ class: ClassInstance; action: 'edit' | 'delete' } | null>(null);
   const [pendingChanges, setPendingChanges] = useState<any>(null);
+  const [bookingClass, setBookingClass] = useState<ClassInstance | null>(null);
   const [classInstances, setClassInstances] = useState<ClassInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [queryInProgress, setQueryInProgress] = useState(false);
   const { studioInfo, isLoading: dataLoading, initialized } = useData();
   const { userRole, userId } = useAuth();
+  const { timezone } = useLocalization();
 
   const fetchClassInstances = useCallback(async () => {
-    if (!userRole || !userId || !initialized || queryInProgress) return;
+    if (!userRole || !userId || !initialized || queryInProgress || !studioInfo?.id) return;
   
     try {
       setQueryInProgress(true);
+      let parentId: string | null = null;
+
+      if (userRole === 'parent') {
+        const { data: parentData, error: parentError } = await supabase
+          .from('parents')
+          .select('id')
+          .eq('user_id', userId)
+          .single();
+
+        if (parentError) throw parentError;
+        parentId = parentData.id;
+      }
+
       let query = supabase
         .from('class_instances')
         .select(`
@@ -77,29 +92,33 @@ export default function Classes() {
             is_recurring
           )
         `);
-  
+
       if (userRole === 'parent') {
-        const { data: parentInfo, error: parentError } = await supabase
-          .from('parents')
-          .select('id, studio_id')
-          .eq('user_id', userId)
-          .limit(1)
-          .single();
-  
-        if (parentError || !parentInfo) {
-          console.error('No parent record found for user', parentError);
-          setError('Parent record not found');
-          return;
-        }
-  
-        query = query.eq('class.studio_id', parentInfo.studio_id);
+        // For parents, filter by their studio but ensure we get all class details
+        query = query
+          .eq('class.studio_id', studioInfo.id)
+          .order('date', { ascending: true });
       }
-  
+
       const { data, error } = await query.order('date', { ascending: true });
-  
+
       if (error) throw error;
-  
-      setClassInstances(data || []);
+
+      // For parent users, fetch enrolled students for each class
+      if (userRole === 'parent' && parentId) {
+        const instancesWithEnrollments = await Promise.all(
+          (data || []).map(async (instance) => {
+            const students = await getEnrolledStudents(instance.class_id, parentId);
+            return {
+              ...instance,
+              enrolledStudents: students.map(s => s.name)
+            };
+          })
+        );
+        setClassInstances(instancesWithEnrollments);
+      } else {
+        setClassInstances(data || []);
+      }
     } catch (err) {
       console.error('Error fetching class_instances:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch classes');
@@ -107,11 +126,10 @@ export default function Classes() {
       setQueryInProgress(false);
       setLoading(false);
     }
-  }, [userRole, userId, initialized, queryInProgress]);  
+  }, [userRole, userId, initialized, studioInfo?.id]);  
 
   // **useEffect to Fetch Data on Component Mount or Dependencies Change**
   useEffect(() => {
-    console.log("Fetching class instances...");
     fetchClassInstances();
   }, [fetchClassInstances]);
 
@@ -248,7 +266,8 @@ export default function Classes() {
   const formatTime = (time: string) => {
     return new Date(`2000-01-01T${time}`).toLocaleTimeString([], { 
       hour: 'numeric',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: timezone
     });
   };
 
@@ -298,17 +317,34 @@ export default function Classes() {
       
       {/* **Add Class Form Modal** */}
       {showAddForm && (
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h2 className="text-lg font-semibold text-brand-primary mb-4">Add New Class</h2>
+        <>
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            onClick={() => setShowAddForm(false)}
+          />
+          <div className="fixed inset-y-0 right-0 w-full md:w-[800px] bg-white shadow-xl transform transition-transform duration-300 ease-in-out translate-x-0 z-[51] flex flex-col">
+            <div className="flex-none px-6 py-4 border-b">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-brand-primary">Add New Class</h2>
+                <button 
+                  onClick={() => setShowAddForm(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 bg-white">
           <AddClassForm
             onSuccess={() => {
               setShowAddForm(false);
-              // **Refresh Classes After Adding**
               fetchClassInstances();
             }}
             onCancel={() => setShowAddForm(false)}
           />
-        </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* **Edit Class Form Modal** */}
@@ -339,6 +375,7 @@ export default function Classes() {
   onClassClick={setSelectedClass}
   onEdit={(classItem) => setModifyingClass({ class: classItem, action: 'edit' })}
   onDelete={(classItem) => setModifyingClass({ class: classItem, action: 'delete' })}
+  onBookDropIn={userRole === 'parent' ? setBookingClass : undefined}
   userRole={userRole}
 />
 
@@ -346,6 +383,7 @@ export default function Classes() {
       {selectedClass && (
         <AttendanceModal
           classId={selectedClass.class_id}
+          instanceId={selectedClass.id}
           userRole={userRole}
           className={selectedClass.name}
           date={selectedClass.date}

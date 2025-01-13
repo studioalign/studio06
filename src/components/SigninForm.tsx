@@ -47,6 +47,13 @@ export default function SigninForm() {
           onChange={(e) => setPassword(e.target.value)}
         />
 
+        <Link
+          to="/forgot-password"
+          className="block text-sm font-medium text-brand-primary hover:text-brand-secondary-400 -mt-5"
+        >
+          Forgot your password?
+        </Link>
+
         <button
           type="submit"
           className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-brand-primary hover:bg-brand-secondary-400 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-accent"

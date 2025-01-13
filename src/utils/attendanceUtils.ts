@@ -2,38 +2,6 @@ import { supabase } from '../lib/supabase';
 
 const BATCH_SIZE = 50; // Optimal batch size for operations
 
-// Get or create class instance
-export async function getOrCreateClassInstance(classId: string, date: string) {
-  try {
-    const { data: existing, error: fetchError } = await supabase
-      .from('class_instances')
-      .select('id')
-      .limit(1)
-      .eq('class_id', classId)
-      .eq('date', date)
-      .single();
-
-    if (fetchError && fetchError.code === 'PGRST116') {
-      // Instance doesn't exist, create it
-      const { data: created, error: createError } = await supabase
-        .from('class_instances')
-        .insert([{ class_id: classId, date, status: 'scheduled' }])
-        .select()
-        .single();
-
-      if (createError) throw createError;
-      return created.id;
-    } else if (fetchError) {
-      throw fetchError;
-    }
-
-    return existing.id;
-  } catch (err) {
-    console.error('Error in getOrCreateClassInstance:', err);
-    throw err;
-  }
-}
-
 // Fetch instance enrollments
 export async function fetchInstanceStudents(instanceId: string) {
   try {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus } from 'lucide-react';
 import DashboardCard from './DashboardCard';
+import StudentDetailsModal from '../StudentDetailsModal';
 import { supabase } from '../../lib/supabase';
 import { useData } from '../../contexts/DataContext';
 
@@ -8,6 +9,21 @@ interface Student {
   id: string;
   name: string;
   date_of_birth: string;
+  gender: string;
+  emergencyContacts: {
+    name: string;
+    relationship: string;
+    phone: string;
+    email: string;
+  }[];
+  medicalConditions: string;
+  allergies: string;
+  medications: string;
+  doctorName: string;
+  doctorPhone: string;
+  photoConsent: boolean;
+  socialMediaConsent: boolean;
+  participationConsent: boolean;
   parent: {
     name: string;
   };
@@ -15,6 +31,7 @@ interface Student {
 
 export default function Students() {
   const [students, setStudents] = useState<Student[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { studioInfo, isLoading: studioLoading } = useData();
@@ -95,30 +112,63 @@ export default function Students() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-brand-primary">Students</h1>
-        <button className="flex items-center px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-secondary-400">
-          <Plus className="w-5 h-5 mr-2" />
-          Add Student
-        </button>
+        <h1 className="text-2xl font-bold text-brand-primary">Students</h1>        
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {students.map((student) => (
-          <DashboardCard
-            key={student.id}
-            title={student.name}
-            items={[
-              { 
-                label: 'Date of Birth', 
-                value: new Date(student.date_of_birth).toLocaleDateString() 
+        {students.map((student) => {
+          // Add mock data for student details
+          const enrichedStudent = {
+            ...student,
+            gender: 'female',
+            emergencyContacts: [
+              {
+                name: 'John Doe',
+                relationship: 'Father',
+                phone: '123-456-7890',
+                email: 'john@example.com'
               },
-              { 
-                label: 'Parent', 
-                value: student.parent?.name || 'Unknown' 
+              {
+                name: 'Jane Doe',
+                relationship: 'Mother',
+                phone: '123-456-7891',
+                email: 'jane@example.com'
               }
-            ]}
-          />
-        ))}
+            ],
+            medicalConditions: 'Asthma',
+            allergies: 'Peanuts',
+            medications: 'Inhaler as needed',
+            doctorName: 'Dr. Smith',
+            doctorPhone: '123-456-7892',
+            photoConsent: true,
+            socialMediaConsent: true,
+            participationConsent: true
+          };
+
+          return (
+            <DashboardCard
+              key={student.id}
+              title={student.name}
+              onClick={() => setSelectedStudent(enrichedStudent)}
+              items={[
+                { 
+                  label: 'Date of Birth', 
+                  value: new Date(student.date_of_birth).toLocaleDateString() 
+                },
+                { 
+                  label: 'Parent', 
+                  value: student.parent?.name || 'Unknown' 
+                }
+              ]}
+            />
+          );
+        })}
       </div>
+      {selectedStudent && (
+        <StudentDetailsModal
+          student={selectedStudent}
+          onClose={() => setSelectedStudent(null)}
+        />
+      )}
       {students.length === 0 && !loading && (
         <p className="text-center text-gray-500 mt-8">No students found</p>
       )}
