@@ -40,6 +40,18 @@ export default function CreateInvoiceForm({ onSuccess, onCancel }: { onSuccess: 
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringInterval, setRecurringInterval] = useState<'weekly' | 'monthly' | 'term'>('monthly');
+  const [weeklyDay, setWeeklyDay] = useState<number>(1); // 1 = Monday
+  const [monthlyDate, setMonthlyDate] = useState<number>(1);
+  const [termMonths, setTermMonths] = useState<number[]>([1, 4, 9]); // Default to January, April, September
+  const [termDates, setTermDates] = useState<number[]>([1, 1, 1]); // Default to 1st of each month
+  const [recurringEndDate, setRecurringEndDate] = useState('');
+  const [discountType, setDiscountType] = useState<'percentage' | 'fixed'>('percentage');
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
 
   useEffect(() => {
     if (!studioInfo?.id) return;
@@ -365,6 +377,181 @@ export default function CreateInvoiceForm({ onSuccess, onCancel }: { onSuccess: 
             </div>
           </div>
         ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Discount Section */}
+        <div>
+          <label className="block text-sm font-medium text-brand-secondary-400 mb-1">
+            Discount Type
+          </label>
+          <select
+            value={discountType}
+            onChange={(e) => setDiscountType(e.target.value as 'percentage' | 'fixed')}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
+          >
+            <option value="percentage">Percentage</option>
+            <option value="fixed">Fixed Amount</option>
+          </select>
+        </div>
+
+        <FormInput
+          id="discountValue"
+          type="text"
+          label={`Discount ${discountType === 'percentage' ? '(%)' : '($)'}`}
+          value={discountValue}
+          onChange={(e) => {
+            const value = e.target.value.replace(/[^\d.]/g, '');
+            if ((value.match(/\./g) || []).length <= 1) {
+              setDiscountValue(value);
+            }
+          }}
+        />
+
+        <div className="col-span-2">
+          <FormInput
+            id="discountReason"
+            type="text"
+            label="Discount Reason"
+            value={discountReason}
+            onChange={(e) => setDiscountReason(e.target.value)}
+            placeholder="e.g., Sibling discount, Early payment, etc."
+          />
+        </div>
+
+        {/* Recurring Payment Section */}
+        <div className="col-span-2">
+          <div className="flex items-center space-x-2 mb-4">
+            <input
+              type="checkbox"
+              id="isRecurring"
+              checked={isRecurring}
+              onChange={(e) => setIsRecurring(e.target.checked)}
+              className="h-4 w-4 text-brand-primary border-gray-300 rounded focus:ring-brand-accent"
+            />
+            <label htmlFor="isRecurring" className="text-sm font-medium text-gray-700">
+              Set as recurring payment
+            </label>
+          </div>
+
+          {isRecurring && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-brand-secondary-400 mb-1">
+                  Recurring Interval
+                </label>
+                <select
+                  value={recurringInterval}
+                  onChange={(e) => setRecurringInterval(e.target.value as any)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
+                >
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="term">Term</option>
+                </select>
+              </div>
+
+              {/* Recurring Payment Schedule */}
+              {isRecurring && (
+                <div className="col-span-2 mt-4">
+                  {recurringInterval === 'weekly' && (
+                    <div>
+                      <label className="block text-sm font-medium text-brand-secondary-400 mb-1">
+                        Payment Day
+                      </label>
+                      <select
+                        value={weeklyDay}
+                        onChange={(e) => setWeeklyDay(parseInt(e.target.value))}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
+                      >
+                        <option value={1}>Monday</option>
+                        <option value={2}>Tuesday</option>
+                        <option value={3}>Wednesday</option>
+                        <option value={4}>Thursday</option>
+                        <option value={5}>Friday</option>
+                        <option value={6}>Saturday</option>
+                        <option value={0}>Sunday</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {recurringInterval === 'monthly' && (
+                    <div>
+                      <label className="block text-sm font-medium text-brand-secondary-400 mb-1">
+                        Payment Date
+                      </label>
+                      <select
+                        value={monthlyDate}
+                        onChange={(e) => setMonthlyDate(parseInt(e.target.value))}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
+                      >
+                        {Array.from({ length: 28 }, (_, i) => i + 1).map(date => (
+                          <option key={date} value={date}>{date}</option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Note: Payment will be processed on the last day of the month for months with fewer days.
+                      </p>
+                    </div>
+                  )}
+
+                  {recurringInterval === 'term' && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-brand-secondary-400 mb-1">
+                          Term Payment Months
+                        </label>
+                        <div className="grid grid-cols-3 gap-4">
+                          {[0, 1, 2].map((index) => (
+                            <div key={index}>
+                              <select
+                                value={termMonths[index]}
+                                onChange={(e) => {
+                                  const newMonths = [...termMonths];
+                                  newMonths[index] = parseInt(e.target.value);
+                                  setTermMonths(newMonths);
+                                }}
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
+                              >
+                                {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                                  <option key={month} value={month}>
+                                    {new Date(2024, month - 1).toLocaleString('default', { month: 'long' })}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                value={termDates[index]}
+                                onChange={(e) => {
+                                  const newDates = [...termDates];
+                                  newDates[index] = parseInt(e.target.value);
+                                  setTermDates(newDates);
+                                }}
+                                className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-brand-accent focus:border-brand-accent"
+                              >
+                                {Array.from({ length: 28 }, (_, i) => i + 1).map(date => (
+                                  <option key={date} value={date}>{date}</option>
+                                ))}
+                              </select>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <FormInput
+                id="recurringEndDate"
+                type="date"
+                label="End Date"
+                value={recurringEndDate}
+                onChange={(e) => setRecurringEndDate(e.target.value)}
+                required={isRecurring}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       <div>

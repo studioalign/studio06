@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
+import StudentDetailsModal from '../StudentDetailsModal';
 import {
   getOrCreateClassInstance,
   fetchInstanceStudents,
@@ -27,6 +28,21 @@ interface Student {
   id: string;
   enrollment_id: string;
   name: string;
+  gender: string;
+  emergencyContacts: {
+    name: string;
+    relationship: string;
+    phone: string;
+    email: string;
+  }[];
+  medicalConditions: string;
+  allergies: string;
+  medications: string;
+  doctorName: string;
+  doctorPhone: string;
+  photoConsent: boolean;
+  socialMediaConsent: boolean;
+  participationConsent: boolean;
   attendance?: {
     status: 'present' | 'late' | 'authorised' | 'unauthorised';
     notes: string;
@@ -51,6 +67,7 @@ const statusOptions = [
 
 export default function AttendanceModal({ classId, instanceId, userRole, className, date, onClose }: AttendanceModalProps) {
   const [students, setStudents] = useState<Student[]>([]);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +100,30 @@ export default function AttendanceModal({ classId, instanceId, userRole, classNa
           id: item.student.id,
           enrollment_id: item.id,
           name: item.student.name,
+          // Add mock data for student details
+          gender: 'female',
+          emergencyContacts: [
+            {
+              name: 'John Doe',
+              relationship: 'Father',
+              phone: '123-456-7890',
+              email: 'john@example.com'
+            },
+            {
+              name: 'Jane Doe',
+              relationship: 'Mother',
+              phone: '123-456-7891',
+              email: 'jane@example.com'
+            }
+          ],
+          medicalConditions: 'Asthma',
+          allergies: 'Peanuts',
+          medications: 'Inhaler as needed',
+          doctorName: 'Dr. Smith',
+          doctorPhone: '123-456-7892',
+          photoConsent: true,
+          socialMediaConsent: true,
+          participationConsent: true,
           attendance: allAttendanceRecords.find((record: AttendanceRecord) => 
             record.instance_enrollment_id === item.id
           )
@@ -171,8 +212,8 @@ export default function AttendanceModal({ classId, instanceId, userRole, classNa
 
   if (loading) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-        <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
+      <div className="fixed inset-y-0 right-0 w-full md:w-[600px] bg-white shadow-xl transform transition-transform duration-300 ease-in-out translate-x-0">
+        <div className="p-6">
           <div className="animate-pulse space-y-4">
             <div className="h-8 bg-gray-200 rounded w-1/2" />
             <div className="space-y-3">
@@ -187,76 +228,95 @@ export default function AttendanceModal({ classId, instanceId, userRole, classNa
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl">
-        <div className="flex justify-between items-center mb-6">
-          <div>
-            <h2 className="text-xl font-semibold text-brand-primary">{className}</h2>
-            <p className="text-brand-secondary-400">{new Date(selectedDate).toLocaleDateString()}</p>
+    <>
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-25 transition-opacity"
+        onClick={onClose}
+      />
+      <div className="fixed inset-y-0 right-0 w-full md:w-[600px] bg-white shadow-xl transform transition-transform duration-300 ease-in-out translate-x-0 flex flex-col">
+        {/* Header */}
+        <div className="flex-none px-6 py-4 border-b">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-semibold text-brand-primary">{className}</h2>
+              <p className="text-brand-secondary-400">{new Date(selectedDate).toLocaleDateString()}</p>
+            </div>
+            <button 
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-6 h-6" />
+            </button>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-6 h-6" />
-          </button>
+          {error && (
+            <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-md">
+              {error}
+            </div>
+          )}
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md">
-            {error}
-          </div>
-        )}
-
-        <div className="space-y-4">
-          {students.map(student => (
-            <div key={student.id} className="p-4 border rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="font-medium">{student.name}</h3>
+        {/* Student List */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-4">
+            {students.map(student => (
+              <div key={student.id} className="p-4 border rounded-lg bg-white">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 
+                    className="font-medium hover:text-brand-primary cursor-pointer"
+                    title="Click to view student details"
+                    onClick={() => setSelectedStudent(student)}
+                  >
+                    {student.name}
+                  </h3>
+                  {userRole !== 'parent' ? (
+                    <div className="flex gap-2">
+                      {statusOptions.map(option => (
+                        <button
+                          key={option.value}
+                          onClick={() => handleStatusChange(student.id, option.value)}
+                          className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            student.attendance?.status === option.value
+                              ? option.color
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      statusOptions.find(opt => opt.value === student.attendance?.status)?.color || 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {statusOptions.find(opt => opt.value === student.attendance?.status)?.label || 'Not Marked'}
+                    </span>
+                  )}
+                </div>
                 {userRole !== 'parent' ? (
-                  <div className="flex gap-2">
-                    {statusOptions.map(option => (
-                      <button
-                        key={option.value}
-                        onClick={() => handleStatusChange(student.id, option.value)}
-                        className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          student.attendance?.status === option.value
-                            ? option.color
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
+                  <input
+                    type="text"
+                    placeholder="Add notes..."
+                    value={student.attendance?.notes || ''}
+                    onChange={(e) => handleNotesChange(student.id, e.target.value)}
+                    className="w-full px-3 py-2 border rounded-md text-sm"
+                  />
                 ) : (
-                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    statusOptions.find(opt => opt.value === student.attendance?.status)?.color || 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {statusOptions.find(opt => opt.value === student.attendance?.status)?.label || 'Not Marked'}
-                  </span>
+                  student.attendance?.notes && (
+                    <p className="mt-2 text-sm text-gray-600">{student.attendance.notes}</p>
+                  )
                 )}
               </div>
-              {userRole !== 'parent' ? (
-                <input
-                  type="text"
-                  placeholder="Add notes..."
-                  value={student.attendance?.notes || ''}
-                  onChange={(e) => handleNotesChange(student.id, e.target.value)}
-                  className="w-full px-3 py-2 border rounded-md text-sm"
-                />
-              ) : (
-                student.attendance?.notes && (
-                  <p className="mt-2 text-sm text-gray-600">{student.attendance.notes}</p>
-                )
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
+        {/* Footer */}
         {userRole !== 'parent' && (
-          <div className="mt-6 flex justify-end">
+          <div className="flex-none px-6 py-4 border-t bg-white">
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-secondary-400 disabled:bg-gray-400"
+              className="w-full flex items-center justify-center px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-secondary-400 disabled:bg-gray-400"
             >
               <Save className="w-4 h-4 mr-2" />
               {saving ? 'Saving...' : 'Save Attendance'}
@@ -264,6 +324,13 @@ export default function AttendanceModal({ classId, instanceId, userRole, classNa
           </div>
         )}
       </div>
-    </div>
+      
+      {selectedStudent && (
+        <StudentDetailsModal
+          student={selectedStudent}
+          onClose={() => setSelectedStudent(null)}
+        />
+      )}
+    </>
   );
 }

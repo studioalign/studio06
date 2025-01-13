@@ -12,7 +12,6 @@ const ownerNavigation = [
   { name: 'Teachers', to: '/dashboard/teachers', icon: Users },
   { name: 'Students', to: '/dashboard/students', icon: GraduationCap },
   { name: 'Payments', to: '/dashboard/payments', icon: DollarSign },
-  { name: 'Plans', to: '/dashboard/plans', icon: CreditCard },
   { name: 'Invoices', to: '/dashboard/invoices', icon: FileText },
 ];
 

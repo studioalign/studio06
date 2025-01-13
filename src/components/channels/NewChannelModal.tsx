@@ -1,77 +1,96 @@
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
-import { useData } from "../../contexts/DataContext";
 import { supabase } from "../../lib/supabase";
 import FormInput from "../FormInput";
-import SearchableDropdown from "../SearchableDropdown";
+import MultiSelectDropdown from "../MultiSelectDropdown";
+import { getUsersByRole } from "../../utils/messagingUtils";
 
 interface NewChannelModalProps {
 	onClose: () => void;
 }
 
 export default function NewChannelModal({ onClose }: NewChannelModalProps) {
-	const { studioInfo } = useData();
 	const [name, setName] = useState("");
 	const [description, setDescription] = useState("");
-	const [selectedClass, setSelectedClass] = useState<{
-		id: string;
-		label: string;
-	} | null>(null);
-	const [classes, setClasses] = useState<{ id: string; name: string }[]>([]);
+	const [selectedMembers, setSelectedMembers] = useState<{ id: string; label: string }[]>([]);
+	const [availableUsers, setAvailableUsers] = useState<{ id: string; label: string }[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	useEffect(() => {
-		async function fetchClasses() {
-			if (!studioInfo?.id) return;
-
+		async function fetchUsers() {
 			try {
-				const { data, error: fetchError } = await supabase
-					.from("classes")
-					.select("id, name")
-					.eq("studio_id", studioInfo.id)
-					.order("name");
+				// Fetch all teachers and parents
+				const [teachers, parents] = await Promise.all([
+					getUsersByRole('teacher'),
+					getUsersByRole('parent')
+				]);
 
-				if (fetchError) throw fetchError;
-				setClasses(data || []);
+				const users = [...teachers, ...parents].map(user => ({
+					id: user.user_id,
+					label: `${user.name} (${user.email})`
+				}));
+				
+				setAvailableUsers(users);
 			} catch (err) {
-				console.error("Error fetching classes:", err);
-				setError(
-					err instanceof Error ? err.message : "Failed to fetch classes"
-				);
+				console.error('Error fetching users:', err);
+				setError(err instanceof Error ? err.message : 'Failed to fetch users');
 			} finally {
 				setLoading(false);
 			}
 		}
 
-		fetchClasses();
-	}, [studioInfo?.id]);
+		fetchUsers();
+	}, []);
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!selectedClass) return;
+		if (selectedMembers.length === 0) return;
 
 		setIsSubmitting(true);
 		setError(null);
 
 		try {
+			// Get the current user's ID
+			const { data: { user } } = await supabase.auth.getUser();
+			if (!user) throw new Error('No user found');
+
+			// Create the channel
 			const { error: insertError } = await supabase
-				.from("class_channels")
+				.from('class_channels')
 				.insert([
 					{
-						class_id: selectedClass.id,
 						name,
 						description: description || null,
-						created_by: (await supabase.auth.getUser()).data.user?.id,
+						created_by: user.id,
 					},
 				]);
 
 			if (insertError) throw insertError;
+
+			// Add all selected members to the channel
+			const memberInserts = selectedMembers.map(member => ({
+				user_id: member.id,
+				role: 'member'
+			}));
+
+			// Add the creator as an admin
+			memberInserts.push({
+				user_id: user.id,
+				role: 'admin'
+			});
+
+			const { error: membersError } = await supabase
+				.from('channel_members')
+				.insert(memberInserts);
+
+			if (membersError) throw membersError;
+
 			onClose();
 		} catch (err) {
-			console.error("Error creating channel:", err);
-			setError(err instanceof Error ? err.message : "Failed to create channel");
+			console.error('Error creating channel:', err);
+			setError(err instanceof Error ? err.message : 'Failed to create channel');
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -82,7 +101,7 @@ export default function NewChannelModal({ onClose }: NewChannelModalProps) {
 			<div className="bg-white rounded-lg p-6 w-full max-w-md">
 				<div className="flex justify-between items-center mb-6">
 					<h2 className="text-xl font-semibold text-brand-primary">
-						Create New Channel
+						Create Channel
 					</h2>
 					<button
 						onClick={onClose}
@@ -93,12 +112,12 @@ export default function NewChannelModal({ onClose }: NewChannelModalProps) {
 				</div>
 
 				<form onSubmit={handleSubmit} className="space-y-4">
-					<SearchableDropdown
-						id="class"
-						label="Select Class"
-						value={selectedClass}
-						onChange={setSelectedClass}
-						options={classes.map((c) => ({ id: c.id, label: c.name }))}
+					<MultiSelectDropdown
+						id="members"
+						label="Select Channel Members"
+						value={selectedMembers}
+						onChange={setSelectedMembers}
+						options={availableUsers}
 						isLoading={loading}
 						required
 					/>
@@ -140,7 +159,7 @@ export default function NewChannelModal({ onClose }: NewChannelModalProps) {
 						</button>
 						<button
 							type="submit"
-							disabled={isSubmitting || !name.trim() || !selectedClass}
+							disabled={isSubmitting || !name.trim() || selectedMembers.length === 0}
 							className="px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-secondary-400 disabled:bg-gray-400"
 						>
 							Create Channel

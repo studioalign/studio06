@@ -32,6 +32,7 @@ interface Invoice {
   };
   items: InvoiceItem[];
 }
+import { useLocalization } from '../../contexts/LocalizationContext';
 
 interface InvoiceDetailProps {
   invoice: Invoice;
@@ -41,6 +42,7 @@ interface InvoiceDetailProps {
 
 export default function InvoiceDetail({ invoice, onEdit, onRefresh }: InvoiceDetailProps) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const { currency } = useLocalization();
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -108,7 +110,7 @@ export default function InvoiceDetail({ invoice, onEdit, onRefresh }: InvoiceDet
           <div className="text-right">
             <h3 className="text-sm font-medium text-brand-secondary-400 mb-1">Amount Due</h3>
             <p className="text-3xl font-bold text-brand-primary">
-              {formatCurrency(invoice.total)}
+              {formatCurrency(invoice.total, currency)}
             </p>
           </div>
         </div>
@@ -136,25 +138,25 @@ export default function InvoiceDetail({ invoice, onEdit, onRefresh }: InvoiceDet
                       <span className="capitalize">{item.type}</span>
                     </td>
                     <td className="py-4 text-right">{item.quantity}</td>
-                    <td className="py-4 text-right">{formatCurrency(item.unit_price)}</td>
-                    <td className="py-4 text-right">{formatCurrency(item.total)}</td>
+                    <td className="py-4 text-right">{formatCurrency(item.unit_price, currency)}</td>
+                    <td className="py-4 text-right">{formatCurrency(item.total, currency)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="border-t">
                 <tr>
                   <td colSpan={5} className="py-4 text-right font-medium">Subtotal</td>
-                  <td className="py-4 text-right">{formatCurrency(invoice.subtotal)}</td>
+                  <td className="py-4 text-right">{formatCurrency(invoice.subtotal, currency)}</td>
                 </tr>
                 {invoice.tax > 0 && (
                   <tr>
                     <td colSpan={5} className="py-4 text-right font-medium">Tax</td>
-                    <td className="py-4 text-right">{formatCurrency(invoice.tax)}</td>
+                    <td className="py-4 text-right">{formatCurrency(invoice.tax, currency)}</td>
                   </tr>
                 )}
                 <tr>
                   <td colSpan={5} className="py-4 text-right font-medium text-lg">Total</td>
-                  <td className="py-4 text-right font-bold text-lg">{formatCurrency(invoice.total)}</td>
+                  <td className="py-4 text-right font-bold text-lg">{formatCurrency(invoice.total, currency)}</td>
                 </tr>
               </tfoot>
             </table>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import { useLocalization } from '../../contexts/LocalizationContext';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../utils/formatters';
 import FormInput from '../FormInput';
@@ -19,6 +20,7 @@ interface RefundModalProps {
 }
 
 export default function RefundModal({ payment, onClose, onSuccess }: RefundModalProps) {
+  const { currency } = useLocalization();
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -77,21 +79,21 @@ export default function RefundModal({ payment, onClose, onSuccess }: RefundModal
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <p className="text-sm text-brand-secondary-400">Original Payment</p>
-            <p className="font-medium">{formatCurrency(payment.amount)}</p>
+            <p className="font-medium">{formatCurrency(payment.amount, currency)}</p>
           </div>
 
           {totalRefunded > 0 && (
             <div>
               <p className="text-sm text-brand-secondary-400">Already Refunded</p>
               <p className="font-medium text-red-600">
-                {formatCurrency(totalRefunded)}
+                {formatCurrency(totalRefunded, currency)}
               </p>
             </div>
           )}
 
           <div>
             <p className="text-sm text-brand-secondary-400">Maximum Refund</p>
-            <p className="font-medium">{formatCurrency(maxRefund)}</p>
+            <p className="font-medium">{formatCurrency(maxRefund, currency)}</p>
           </div>
 
           <FormInput

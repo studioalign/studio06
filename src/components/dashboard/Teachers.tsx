@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Plus } from 'lucide-react';
 import DashboardCard from './DashboardCard';
+import AddTeacherForm from './AddTeacherForm';
 import { useData } from '../../contexts/DataContext';
 
 interface Teacher {
@@ -11,6 +12,7 @@ interface Teacher {
 }
 
 export default function Teachers() {
+  const [showAddForm, setShowAddForm] = useState(false);
   const { teachers, isLoading, error } = useData();
 
   // Show skeleton loading state instead of "Loading..."
@@ -44,11 +46,28 @@ export default function Teachers() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-brand-primary">Teachers</h1>
-        <button className="flex items-center px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-secondary-400">
+        <button 
+          onClick={() => setShowAddForm(true)}
+          className="flex items-center px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-secondary-400"
+        >
           <Plus className="w-5 h-5 mr-2" />
           Add Teacher
         </button>
       </div>
+      
+      {showAddForm && (
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <h2 className="text-lg font-semibold text-brand-primary mb-4">Add New Teacher</h2>
+          <AddTeacherForm
+            onSuccess={() => {
+              setShowAddForm(false);
+              // In real implementation, this would refresh the teachers list
+            }}
+            onCancel={() => setShowAddForm(false)}
+          />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {teachers.map((teacher) => (
           <DashboardCard

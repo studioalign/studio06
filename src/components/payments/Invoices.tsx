@@ -1,13 +1,18 @@
 import React, { useState, useCallback } from 'react';
-import { Plus, FileText, Search } from 'lucide-react';
+import { Plus, FileText, Search, X } from 'lucide-react';
 import CreateInvoiceForm from './CreateInvoiceForm';
 import InvoiceDetail from './InvoiceDetail';
 import EditInvoiceForm from './EditInvoiceForm';
 import { useInvoices } from '../../hooks/useInvoices';
 import { formatCurrency } from '../../utils/formatters';
+import { useData } from '../../contexts/DataContext';
+import { useLocalization } from '../../contexts/LocalizationContext';
+import { supabase } from '../../lib/supabase';
 import type { Invoice } from '../../hooks/useInvoices';
 
 export default function Invoices() {
+  const { studioInfo } = useData();
+  const { currency, dateFormat } = useLocalization();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string | undefined>();
   const [search, setSearch] = useState('');
@@ -92,9 +97,25 @@ export default function Invoices() {
         </button>
       </div>
       
-      {showCreateForm ? (
-        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
-          <h2 className="text-lg font-semibold text-brand-primary mb-4">Create New Invoice</h2>
+      {showCreateForm && (
+        <>
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-25 transition-opacity z-40"
+            onClick={() => setShowCreateForm(false)}
+          />
+          <div className="fixed inset-y-0 right-0 w-full md:w-[800px] bg-white shadow-xl transform transition-transform duration-300 ease-in-out translate-x-0 z-50 flex flex-col">
+            <div className="flex-none px-6 py-4 border-b">
+              <div className="flex justify-between items-center">
+                <h2 className="text-xl font-semibold text-brand-primary">Create New Invoice</h2>
+                <button 
+                  onClick={() => setShowCreateForm(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
           <CreateInvoiceForm
             onSuccess={() => {
               setShowCreateForm(false);
@@ -102,8 +123,12 @@ export default function Invoices() {
             }}
             onCancel={() => setShowCreateForm(false)}
           />
-        </div>
-      ) : (
+            </div>
+          </div>
+        </>
+      )}
+      
+      {!showCreateForm && (
         <div className="bg-white rounded-lg shadow">
           <div className="border-b p-4">
             <div className="flex justify-between items-center mb-4">
@@ -173,9 +198,9 @@ export default function Invoices() {
                     </div>
                     <div className="flex items-center space-x-6">
                       <div className="text-right">
-                        <p className="font-medium">{formatCurrency(invoice.total)}</p>
+                        <p className="font-medium">{formatCurrency(invoice.total, currency)}</p>
                         <p className="text-sm text-gray-500">
-                          Due {new Date(invoice.due_date).toLocaleDateString()}
+                          Due {formatDate(invoice.due_date, dateFormat)}
                         </p>
                       </div>
                       <span className={`px-3 py-1 text-sm font-medium rounded-full ${
