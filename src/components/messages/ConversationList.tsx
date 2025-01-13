@@ -2,13 +2,15 @@ import React, { useState } from 'react';
 import { Plus, User } from 'lucide-react';
 import { useMessaging } from '../../contexts/MessagingContext';
 import { formatMessageDate } from '../../utils/messagingUtils';
-import NewMessageModal from './NewMessageModal';
 import { useAuth } from '../../contexts/AuthContext';
 
-export default function ConversationList() {
+interface ConversationListProps {
+  onNewMessage: () => void;
+}
+
+export default function ConversationList({ onNewMessage }: ConversationListProps) {
   const { conversations, activeConversation, setActiveConversation } = useMessaging();
   const { userId } = useAuth();
-  const [showNewMessage, setShowNewMessage] = useState(false);
 
   const getParticipantDisplay = (conversation: any) => {
     const otherParticipant = conversation.participants.find(
@@ -21,7 +23,7 @@ export default function ConversationList() {
     <div className="h-full flex flex-col">
       <div className="p-4 border-b">
         <button
-          onClick={() => setShowNewMessage(true)}
+          onClick={onNewMessage}
           className="w-full flex items-center justify-center px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-secondary-400"
         >
           <Plus className="w-4 h-4 mr-2" />
@@ -78,10 +80,6 @@ export default function ConversationList() {
           </div>
         )}
       </div>
-
-      {showNewMessage && (
-        <NewMessageModal onClose={() => setShowNewMessage(false)} />
-      )}
     </div>
   );
 }

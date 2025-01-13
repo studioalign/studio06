@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useChannel } from '../../hooks/useChannel';
 import { useAuth } from '../../contexts/AuthContext';
 import PostComposer from './PostComposer';
 import PostCard from './PostCard';
 import ChannelMembers from './ChannelMembers';
-import { Users } from 'lucide-react';
+import { Users, ArrowLeft } from 'lucide-react';
 
 interface ChannelFeedProps {
   channelId: string;
@@ -56,22 +56,15 @@ export default function ChannelFeed({ channelId }: ChannelFeedProps) {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b bg-white p-4">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-xl font-semibold text-brand-primary">{channel.name}</h1>
-            {channel.description && (
-              <p className="text-gray-600 mt-1">{channel.description}</p>
-            )}
-          </div>
-          <button
-            onClick={() => setShowMembers(true)}
-            className="flex items-center px-3 py-1 text-sm text-gray-600 hover:text-brand-primary"
-          >
-            <Users className="w-4 h-4 mr-1" />
-            Members
-          </button>
-        </div>
+      {/* Mobile back button */}
+      <div className="lg:hidden flex items-center px-4 py-2 border-b bg-white">
+        <button
+          onClick={() => window.history.back()}
+          className="p-2 -ml-2 text-gray-500 hover:text-gray-700"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h2 className="ml-2 font-medium text-gray-900">Back to Channels</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">

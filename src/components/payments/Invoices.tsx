@@ -131,13 +131,13 @@ export default function Invoices() {
       {!showCreateForm && (
         <div className="bg-white rounded-lg shadow">
           <div className="border-b p-4">
-            <div className="flex justify-between items-center mb-4">
-              <nav className="flex">
+            <div className="mb-4">
+              <nav className="flex overflow-x-auto pb-2">
                 {filters.map((item) => (
                   <button
                     key={item.id || 'all'}
                     onClick={() => setSelectedStatus(item.id)}
-                    className={`px-4 py-2 text-sm font-medium border-b-2 ${
+                    className={`px-4 py-2 text-sm font-medium border-b-2 whitespace-nowrap ${
                       selectedStatus === item.id
                         ? 'border-brand-primary text-brand-primary'
                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'

@@ -12,10 +12,10 @@ export default function Overview() {
   if (userRole === 'owner') {
     return (
       <div className="space-y-8">
-        <h1 className="text-2xl font-bold text-brand-primary">Studio Overview</h1>
+        <h1 className="text-2xl font-bold text-brand-primary mb-6">Studio Overview</h1>
         
         {/* Financial Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           <StatsCard
             title="Total Revenue"
             value={formatCurrency(12450, currency)}
@@ -40,7 +40,7 @@ export default function Overview() {
         </div>
 
         {/* Studio Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           <StatsCard
             title="Active Students"
             value="156"

@@ -23,7 +23,7 @@ export default function NotificationDropdown({ onClose }: { onClose: () => void 
   };
 
   return (
-    <div className="w-96 bg-white rounded-lg shadow-lg py-1">
+    <div className="w-full sm:w-96 bg-white rounded-lg shadow-lg py-1 mx-4 sm:mx-0">
       <div className="flex items-center justify-between px-4 py-2 border-b">
         <h3 className="font-medium text-gray-900">Notifications</h3>
         <button onClick={onClose} className="text-gray-400 hover:text-gray-600">

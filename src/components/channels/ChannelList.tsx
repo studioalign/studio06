@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Plus, Hash } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useChannels } from '../../hooks/useChannels';
 import { useAuth } from '../../contexts/AuthContext';
-import NewChannelModal from './NewChannelModal';
 
-export default function ChannelList() {
+interface ChannelListProps {
+  onNewChannel: () => void; // Add prop for triggering the modal
+}
+
+export default function ChannelList({ onNewChannel }: ChannelListProps) {
   const { channels, loading } = useChannels();
   const { channelId } = useParams();
   const navigate = useNavigate();
   const { userRole } = useAuth();
-  const [showNewChannel, setShowNewChannel] = useState(false);
 
   if (loading) {
     return (
@@ -31,7 +33,7 @@ export default function ChannelList() {
           <h2 className="font-semibold text-brand-primary">Class Channels</h2>
           {userRole === 'owner' && (
             <button
-              onClick={() => setShowNewChannel(true)}
+              onClick={onNewChannel} // Use the callback here
               className="p-1 text-gray-500 hover:text-brand-primary"
               title="Create Channel"
             >
@@ -68,10 +70,6 @@ export default function ChannelList() {
           </div>
         )}
       </div>
-
-      {showNewChannel && (
-        <NewChannelModal onClose={() => setShowNewChannel(false)} />
-      )}
     </div>
   );
 }

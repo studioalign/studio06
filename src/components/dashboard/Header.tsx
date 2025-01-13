@@ -67,9 +67,9 @@ export default function Header() {
     : studioName;
 
   return (
-    <header className="h-16 bg-white border-b border-gray-200 px-8 flex items-center justify-between">
+    <header className="h-16 bg-white border-b border-gray-200 px-16 lg:px-8 flex items-center justify-between">
       <div className="flex items-center">
-        <h2 className="text-2xl font-semibold text-brand-primary">{displayName || 'Loading...'}</h2>
+        <h2 className="text-lg md:text-xl lg:text-2xl font-semibold text-brand-primary truncate">{displayName || 'Loading...'}</h2>
       </div>
       <div className="flex items-center space-x-4">
         <button 
@@ -125,7 +125,7 @@ export default function Header() {
                 <div className="border-t my-1" />
                 <button
                   onClick={handleSignOut}
-                  className="w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center"
+                  className="w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center whitespace-nowrap"
                 >
                   <LogOut className="w-4 h-4" />
                   <span className="ml-2">Sign out</span>
