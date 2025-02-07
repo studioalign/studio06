@@ -48,10 +48,10 @@ export function useChannel(channelId: string) {
 	const [posts, setPosts] = useState<Post[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const { userId } = useAuth();
+	const { profile } = useAuth();
 
 	useEffect(() => {
-		if (!channelId || !userId) return;
+		if (!channelId || !profile?.id) return;
 
 		const fetchChannel = async () => {
 			try {
@@ -141,7 +141,7 @@ export function useChannel(channelId: string) {
 		return () => {
 			subscription.unsubscribe();
 		};
-	}, [channelId, userId]);
+	}, [channelId, profile?.id]);
 
 	return { channel, posts, loading, error };
 }

@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabase";
 import FormInput from "../FormInput";
 import MultiSelectDropdown from "../MultiSelectDropdown";
 import { getUsersByRole } from "../../utils/messagingUtils";
+import { useAuth } from "../../contexts/AuthContext";
 
 interface NewChannelModalProps {
 	onClose: () => void;
@@ -12,30 +13,35 @@ interface NewChannelModalProps {
 export default function NewChannelModal({ onClose }: NewChannelModalProps) {
 	const [name, setName] = useState("");
 	const [description, setDescription] = useState("");
-	const [selectedMembers, setSelectedMembers] = useState<{ id: string; label: string }[]>([]);
-	const [availableUsers, setAvailableUsers] = useState<{ id: string; label: string }[]>([]);
+	const [selectedMembers, setSelectedMembers] = useState<
+		{ id: string; label: string }[]
+	>([]);
+	const [availableUsers, setAvailableUsers] = useState<
+		{ id: string; label: string }[]
+	>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
+	const { profile } = useAuth();
 
 	useEffect(() => {
 		async function fetchUsers() {
 			try {
 				// Fetch all teachers and parents
 				const [teachers, parents] = await Promise.all([
-					getUsersByRole('teacher'),
-					getUsersByRole('parent')
+					getUsersByRole("teacher"),
+					getUsersByRole("parent"),
 				]);
 
-				const users = [...teachers, ...parents].map(user => ({
-					id: user.user_id,
-					label: `${user.name} (${user.email})`
+				const users = [...teachers, ...parents].map((user) => ({
+					id: user.id,
+					label: `${user.name} (${user.email})`,
 				}));
-				
+
 				setAvailableUsers(users);
 			} catch (err) {
-				console.error('Error fetching users:', err);
-				setError(err instanceof Error ? err.message : 'Failed to fetch users');
+				console.error("Error fetching users:", err);
+				setError(err instanceof Error ? err.message : "Failed to fetch users");
 			} finally {
 				setLoading(false);
 			}
@@ -52,45 +58,43 @@ export default function NewChannelModal({ onClose }: NewChannelModalProps) {
 		setError(null);
 
 		try {
-			// Get the current user's ID
-			const { data: { user } } = await supabase.auth.getUser();
-			if (!user) throw new Error('No user found');
-
 			// Create the channel
-			const { error: insertError } = await supabase
-				.from('class_channels')
-				.insert([
-					{
-						name,
-						description: description || null,
-						created_by: user.id,
-					},
-				]);
+			const { data: channel, error: insertError } = await supabase
+				.from("class_channels")
+				.insert({
+					name,
+					description: description || null,
+					created_by: profile?.id + "",
+				})
+				.select("*")
+				.single();
 
 			if (insertError) throw insertError;
 
 			// Add all selected members to the channel
-			const memberInserts = selectedMembers.map(member => ({
+			const memberInserts = selectedMembers.map((member) => ({
+				channel_id: channel.id,
 				user_id: member.id,
-				role: 'member'
+				role: "member",
 			}));
 
 			// Add the creator as an admin
 			memberInserts.push({
-				user_id: user.id,
-				role: 'admin'
+				channel_id: channel.id,
+				user_id: profile?.id + "",
+				role: "admin",
 			});
 
 			const { error: membersError } = await supabase
-				.from('channel_members')
+				.from("channel_members")
 				.insert(memberInserts);
 
 			if (membersError) throw membersError;
 
 			onClose();
 		} catch (err) {
-			console.error('Error creating channel:', err);
-			setError(err instanceof Error ? err.message : 'Failed to create channel');
+			console.error("Error creating channel:", err);
+			setError(err instanceof Error ? err.message : "Failed to create channel");
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -159,7 +163,9 @@ export default function NewChannelModal({ onClose }: NewChannelModalProps) {
 						</button>
 						<button
 							type="submit"
-							disabled={isSubmitting || !name.trim() || selectedMembers.length === 0}
+							disabled={
+								isSubmitting || !name.trim() || selectedMembers.length === 0
+							}
 							className="px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-secondary-400 disabled:bg-gray-400"
 						>
 							Create Channel

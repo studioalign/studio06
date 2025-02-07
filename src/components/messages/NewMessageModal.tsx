@@ -4,6 +4,7 @@ import { useMessaging } from "../../contexts/MessagingContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { getUsersByRole } from "../../utils/messagingUtils";
 import SearchableDropdown from "../SearchableDropdown";
+import { UserData } from "../../types/auth";
 
 interface NewMessageModalProps {
 	onClose: () => void;
@@ -11,7 +12,7 @@ interface NewMessageModalProps {
 
 export default function NewMessageModal({ onClose }: NewMessageModalProps) {
 	const { createConversation, setActiveConversation } = useMessaging();
-	const { userRole, userId } = useAuth();
+	const { profile } = useAuth();
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [recipients, setRecipients] = useState<{ id: string; label: string }[]>(
@@ -25,20 +26,21 @@ export default function NewMessageModal({ onClose }: NewMessageModalProps) {
 	useEffect(() => {
 		async function fetchRecipients() {
 			try {
-				let users = [];
-				if (userRole === "owner") {
+				let users: UserData[] = [];
+				if (profile?.role === "owner") {
 					const [teachers, parents] = await Promise.all([
 						getUsersByRole("teacher"),
 						getUsersByRole("parent"),
 					]);
 					users = [...teachers, ...parents];
-				} else if (userRole === "teacher") {
+				} else if (profile?.role === "teacher") {
 					const [owners, parents] = await Promise.all([
 						getUsersByRole("owner"),
 						getUsersByRole("parent"),
 					]);
+					console.log(owners, parents);
 					users = [...owners, ...parents];
-				} else if (userRole === "parent") {
+				} else if (profile?.role === "parent") {
 					const [owners, teachers] = await Promise.all([
 						getUsersByRole("owner"),
 						getUsersByRole("teacher"),
@@ -48,7 +50,7 @@ export default function NewMessageModal({ onClose }: NewMessageModalProps) {
 
 				setRecipients(
 					users.map((user) => ({
-						id: user.user_id,
+						id: user.id,
 						label: `${user.name} (${user.email})`,
 					}))
 				);
@@ -62,16 +64,16 @@ export default function NewMessageModal({ onClose }: NewMessageModalProps) {
 		}
 
 		fetchRecipients();
-	}, [userRole]);
+	}, [profile?.role]);
 
 	const handleStartConversation = async () => {
 		if (!selectedRecipient) return;
-		if (!userId) return;
+		if (!profile?.id) return;
 
 		try {
 			// Include both the current user and the recipient
-			const conversationId = await createConversation(userId, [
-				userId,
+			const conversationId = await createConversation(profile?.id, [
+				profile?.id,
 				selectedRecipient.id,
 			]);
 			setActiveConversation(conversationId);

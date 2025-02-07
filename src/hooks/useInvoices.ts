@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { useData } from '../contexts/DataContext';
+import { useAuth } from '../contexts/AuthContext';
 
-export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled' | 'refunded';
 
 export interface Invoice {
   id: string;
@@ -25,7 +25,7 @@ interface UseInvoicesOptions {
 }
 
 export function useInvoices({ status, search }: UseInvoicesOptions = {}) {
-  const { studioInfo } = useData();
+  const { profile } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,12 +35,13 @@ export function useInvoices({ status, search }: UseInvoicesOptions = {}) {
     paid: 0,
     overdue: 0,
     cancelled: 0,
+    refunded: 0
   });
 
   useEffect(() => {
-    if (!studioInfo?.id) return;
+    if (!profile?.studio?.id) return;
     fetchInvoices();
-  }, [studioInfo?.id, status, search]);
+  }, [profile?.studio?.id]);
 
   const fetchInvoices = async () => {
     try {
@@ -56,12 +57,12 @@ export function useInvoices({ status, search }: UseInvoicesOptions = {}) {
           tax,
           total,
           created_at,
-          parent:parents (
+          parent:users (
             name,
             email
           )
         `)
-        .eq('studio_id', studioInfo?.id)
+        .eq('studio_id', profile?.studio?.id + "")
         .order('created_at', { ascending: false });
 
       if (status) {
@@ -71,38 +72,50 @@ export function useInvoices({ status, search }: UseInvoicesOptions = {}) {
       if (search) {
         query = query.or(`
           number.ilike.%${search}%,
-          parent.name.ilike.%${search}%,
-          parent.email.ilike.%${search}%
         `);
       }
 
       const { data, error: fetchError } = await query;
 
       if (fetchError) throw fetchError;
-      setInvoices(data || []);
+
+      const filteredData = data?.filter((invoice) => 
+        invoice.parent.name === search || invoice.parent.email === search
+      );
+
+      setInvoices(filteredData);
 
       // Fetch counts for each status
       const { data: countData, error: countError } = await supabase
         .from('invoices')
         .select('status, count')
-        .eq('studio_id', studioInfo?.id)
-        .group('status');
+        .eq('studio_id', profile?.studio?.id + '')
+        .select('*')
+        .then(({ data }) => {
+          const counts = {
+            draft: 0,
+            sent: 0,
+            paid: 0,
+            overdue: 0,
+            cancelled: 0,
+            refunded: 0
+          };
+
+          if (!data) return counts;
+          
+          // Count invoices by status from the fetched data
+          data?.forEach((invoice) => {
+            const status = invoice.status as InvoiceStatus;
+            if (status in counts) {
+              counts[status]++;
+            }
+          });
+          
+          return counts;
+        });
 
       if (countError) throw countError;
-
-      const newCounts = {
-        draft: 0,
-        sent: 0,
-        paid: 0,
-        overdue: 0,
-        cancelled: 0,
-      };
-
-      countData?.forEach(({ status, count }) => {
-        newCounts[status as InvoiceStatus] = count;
-      });
-
-      setCounts(newCounts);
+      setCounts(countData);
     } catch (err) {
       console.error('Error fetching invoices:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch invoices');

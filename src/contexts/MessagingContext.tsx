@@ -8,7 +8,7 @@ import React, {
 import { supabase } from "../lib/supabase";
 import { useAuth } from "./AuthContext";
 
-interface Message {
+export interface Message {
 	id: string;
 	content: string;
 	sender_id: string;
@@ -17,14 +17,15 @@ interface Message {
 	is_deleted: boolean;
 }
 
-interface Conversation {
+export interface Conversation {
 	id: string;
+	unread_count: number;
 	last_message: string | null;
 	last_message_at: string | null;
 	participants: {
-		user_id: string;
-		unread_count: number;
-		last_read_at: string | null;
+		id: string;
+		name: string;
+		email: string;
 	}[];
 }
 
@@ -50,30 +51,29 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 	const [activeConversation, setActiveConversation] = useState<string | null>(
 		null
 	);
+
+	console.log("clicked - ", activeConversation);
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const { userId } = useAuth();
+	const { profile } = useAuth();
 
 	// Initial fetch of conversations
 	useEffect(() => {
-		if (!userId) return;
 		fetchConversations();
-	}, [userId]);
+	}, []);
 
 	// Subscribe to conversations
 	useEffect(() => {
-		if (!userId) return;
-
 		const subscription = supabase
-			.channel(`conversations:${userId}`)
+			.channel(`conversations:${profile?.id}`)
 			.on(
 				"postgres_changes",
 				{
 					event: "*",
 					schema: "public",
 					table: "conversation_participants",
-					filter: `user_id=eq.${userId}`,
+					filter: `user_id=eq.${profile?.id}`,
 				},
 				() => {
 					fetchConversations();
@@ -84,12 +84,12 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 		return () => {
 			subscription.unsubscribe();
 		};
-	}, [userId]);
+	}, [profile?.id!]);
 
 	// Subscribe to messages for active conversation
 	useEffect(() => {
 		if (!activeConversation) return;
-
+		console.log("active");
 		const subscription = supabase
 			.channel(`messages:${activeConversation}`)
 			.on(
@@ -112,49 +112,57 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 	}, [activeConversation]);
 
 	const fetchConversations = async () => {
-		if (!userId) return;
 		setLoading(true);
 		try {
 			const { data, error: fetchError } = await supabase
 				.from("conversation_participants")
 				.select(
 					`
-          conversation:conversations!inner(
-              id,
-              last_message,
-              last_message_at
-          ),
-          user:auth.users!inner(
-              id,
-              email
-          )
-      `
+					unread_count,
+					conversation:conversations!inner(
+					id,
+					last_message,
+					last_message_at,
+					participants:participant_ids
+					)`
 				)
-				.eq("user_id", userId)
-				.order("last_message_at", {
-					ascending: false,
-					nullsFirst: false,
-				});
-
-			console.log(fetchError);
+				.eq("user_id", profile?.id!);
+			// .order("conversation.last_message_at", {
+			// 	nullsFirst: false,
+			// 	ascending: false,
+			// });
 
 			if (fetchError) throw fetchError;
 
-			// Transform the data to match our Conversation interface
-			const transformedData =
-				data?.map((item) => ({
-					id: item.conversation.id,
-					last_message: item.conversation.last_message,
-					last_message_at: item.conversation.last_message_at,
-					participants: [
-						{
-							user_id: item.user.id,
-							email: item.user.email,
-						},
-					],
-				})) || [];
+			// Map the data to match the Conversation type
+			const mappedConversations: Conversation[] = await Promise.all(
+				data.map(async (item: any) => {
+					const participantData = await Promise.all(
+						item.conversation.participants
+							.filter((participantId: string) => participantId !== profile?.id)
+							.map(async (userId: string) => {
+								const { data } = await supabase
+									.from("users")
+									.select("id, name, email")
+									.eq("id", userId)
+									.single();
+								return data;
+							})
+					);
 
-			setConversations(transformedData);
+					return {
+						unread_count: item.unread_count,
+						id: item.conversation.id,
+						last_message: item.conversation.last_message,
+						last_message_at: item.conversation.last_message_at,
+						participants: participantData,
+					};
+				})
+			);
+
+			console.log(mappedConversations);
+
+			setConversations(mappedConversations);
 		} catch (err) {
 			console.error("Error fetching conversations:", err);
 			setError(
@@ -167,6 +175,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
 	const fetchMessages = async (conversationId: string) => {
 		try {
+			console.log("fetching messages", conversationId);
 			const { data, error: fetchError } = await supabase
 				.from("messages")
 				.select("*")
@@ -181,13 +190,13 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 	};
 
 	const sendMessage = async (content: string) => {
-		if (!activeConversation || !userId) return;
+		if (!activeConversation || !profile?.id) return;
 
 		try {
 			const { error: sendError } = await supabase.from("messages").insert([
 				{
 					conversation_id: activeConversation,
-					sender_id: userId,
+					sender_id: profile?.id,
 					content,
 				},
 			]);
@@ -199,12 +208,12 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 	};
 
 	const markAsRead = async () => {
-		if (!activeConversation || !userId) return;
+		if (!activeConversation || !profile?.id) return;
 
 		try {
 			await supabase.rpc("mark_messages_as_read", {
 				p_conversation_id: activeConversation,
-				p_user_id: userId,
+				p_user_id: profile?.id,
 			});
 		} catch (err) {
 			console.error("Error marking messages as read:", err);

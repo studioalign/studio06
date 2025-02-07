@@ -21,22 +21,22 @@ interface RecurringPayment {
 }
 
 export function useRecurringPayments() {
-  const { userId } = useAuth();
+  const { profile } = useAuth();
   const [recurringPayments, setRecurringPayments] = useState<RecurringPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!profile?.id) return;
     fetchRecurringPayments();
-  }, [userId]);
+  }, [profile?.id]);
 
   const fetchRecurringPayments = async () => {
     try {
       const { data: parentData } = await supabase
         .from('parents')
         .select('id')
-        .eq('user_id', userId)
+        .eq('user_id', profile?.id)
         .single();
 
       if (!parentData) return;

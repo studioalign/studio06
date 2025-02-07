@@ -2,16 +2,16 @@ import { supabase } from '../lib/supabase';
 
 export async function getUsersByRole(role: 'owner' | 'teacher' | 'parent') {
   try {
-    const tableName = `${role}s`;
     const { data, error } = await supabase
-      .from(tableName)
-      .select(`
-        id,
-        user_id,
-        name,
-        email,
-        studio_id
-      `);
+      .from("users")
+      .select(
+        `id, name, role, email,
+        studio:studios!users_studio_id_fkey(
+          id, name, address, phone, email
+        )
+      `
+      )
+      .eq("role", role);
 
     if (error) throw error;
     return data || [];

@@ -20,22 +20,22 @@ interface AddPaymentMethodData {
 }
 
 export function usePaymentMethods() {
-  const { userId } = useAuth();
+  const { profile } = useAuth();
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!profile?.id) return;
     fetchPaymentMethods();
-  }, [userId]);
+  }, [profile?.id]);
 
   const fetchPaymentMethods = async () => {
     try {
       const { data: parentData } = await supabase
         .from('parents')
         .select('id')
-        .eq('user_id', userId)
+        .eq('user_id', profile?.id)
         .single();
 
       if (!parentData) return;
@@ -61,7 +61,7 @@ export function usePaymentMethods() {
       const { data: parentData } = await supabase
         .from('parents')
         .select('id')
-        .eq('user_id', userId)
+        .eq('user_id', profile?.id)
         .single();
 
       if (!parentData) throw new Error('Parent not found');
@@ -118,7 +118,7 @@ export function usePaymentMethods() {
       const { data: parentData } = await supabase
         .from('parents')
         .select('id')
-        .eq('user_id', userId)
+        .eq('user_id', profile?.id)
         .single();
 
       if (!parentData) throw new Error('Parent not found');

@@ -15,10 +15,10 @@ export function useChannels() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { userId } = useAuth();
+  const { profile } = useAuth();
 
   useEffect(() => {
-    if (!userId) return;
+    if (!profile?.id) return;
 
     const fetchChannels = async () => {
       try {
@@ -65,7 +65,7 @@ export function useChannels() {
     return () => {
       subscription.unsubscribe();
     };
-  }, [userId]);
+  }, [profile?.id]);
 
   return { channels, loading, error };
 }

@@ -10,7 +10,7 @@ interface Notification {
 }
 
 export function useNotifications() {
-  const { userRole } = useAuth();
+  const { profile } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
@@ -18,7 +18,7 @@ export function useNotifications() {
     const mockNotifications: Notification[] = [];
     const now = new Date();
 
-    if (userRole === 'owner') {
+    if (profile?.role === 'owner') {
       mockNotifications.push(
         {
           id: '1',
@@ -35,7 +35,7 @@ export function useNotifications() {
           created_at: new Date(now.getTime() - 2 * 3600000).toISOString(),
         }
       );
-    } else if (userRole === 'teacher') {
+    } else if (profile?.role === 'teacher') {
       mockNotifications.push(
         {
           id: '3',
@@ -52,7 +52,7 @@ export function useNotifications() {
           created_at: new Date(now.getTime() - 4 * 3600000).toISOString(),
         }
       );
-    } else if (userRole === 'parent') {
+    } else if (profile?.role === 'parent') {
       mockNotifications.push(
         {
           id: '5',
@@ -72,7 +72,7 @@ export function useNotifications() {
     }
 
     setNotifications(mockNotifications);
-  }, [userRole]);
+  }, [profile?.role]);
 
   const markAsRead = (id: string) => {
     setNotifications(prev =>

@@ -1,110 +1,145 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { supabase } from '../lib/supabase';
+import { createContext, useContext, useEffect, useState } from "react";
+import { User } from "@supabase/supabase-js";
+import { supabase } from "../lib/supabase";
+import { UserData } from "../types/auth";
 
 interface AuthContextType {
-  isAuthenticated: boolean;
-  userRole: string | null;
-  userId: string | null;
-  signIn: (email: string, password: string) => Promise<void>;
-  signOut: () => Promise<void>;
+	user: User | null;
+	profile: UserData | null;
+	loading: boolean;
+	signOut: () => Promise<void>;
+	signIn: (email: string, password: string) => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextType>({
+	user: null,
+	profile: null,
+	loading: true,
+	signOut: async () => {},
+	signIn: async () => {},
+});
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+export const useAuth = () => useContext(AuthContext);
 
-  const signIn = async (email: string, password: string) => {
-    console.log('Signing in...'); // Add debugging
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+	const [user, setUser] = useState<User | null>(null);
+	const [profile, setProfile] = useState<UserData | null>(null);
+	const [loading, setLoading] = useState(true);
 
-    const { data: { user }, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+	useEffect(() => {
+		let mounted = true;
 
-    if (error) {
-      console.error('Sign in error:', error); // Add debugging
-      throw new Error('Invalid email or password');
-    }
-    
-    if (!user) {
-      console.error('No user found'); // Add debugging
-      throw new Error('No user found');
-    }
+		const loadProfile = async (userId: string) => {
+			try {
+				const { data, error } = await supabase
+					.from("users")
+					.select(
+						`id, name, role, email,
+						studio:studios!users_studio_id_fkey(
+							id, name, address, phone, email
+						)
+					`
+					)
+					.eq("id", userId)
+					.single();
 
-    try {
-      console.log('Checking user role...'); // Add debugging
+				if (error) {
+					console.error("Error loading profile:", error);
+					if (mounted) setProfile(null);
+				} else if (mounted) {
+					setProfile(data);
+				}
+			} catch (err) {
+				console.error("Unexpected error loading profile:", err);
+				if (mounted) setProfile(null);
+			}
+		};
 
-      // Check each role table to determine the user's role
-      const { data: ownerData } = await supabase
-        .from('owners')
-        .select()
-        .eq('user_id', user.id)
-        .maybeSingle();
+		const initializeSession = async () => {
+			try {
+				const {
+					data: { session },
+				} = await supabase.auth.getSession();
+				const currentUser = session?.user || null;
 
-      if (ownerData) {
-        console.log('User is owner'); // Add debugging
-        setIsAuthenticated(true);
-        setUserRole('owner');
-        setUserId(user.id);
-        return;
-      }
+				if (mounted) {
+					setUser(currentUser);
+					if (currentUser) {
+						await loadProfile(currentUser.id);
+					}
+					setLoading(false);
+				}
+			} catch (error) {
+				console.error("Error during session initialization:", error);
+				if (mounted) setLoading(false);
+			}
+		};
 
-      const { data: teacherData } = await supabase
-        .from('teachers')
-        .select()
-        .eq('user_id', user.id)
-        .maybeSingle();
+		initializeSession();
 
-      if (teacherData) {
-        console.log('User is teacher'); // Add debugging
-        setIsAuthenticated(true);
-        setUserRole('teacher');
-        setUserId(user.id);
-        return;
-      }
+		const authSubscription = supabase.auth.onAuthStateChange(
+			(event, session) => {
+				const currentUser = session?.user || null;
+				setUser(currentUser);
+				if (currentUser) {
+					loadProfile(currentUser.id);
+				} else {
+					setProfile(null);
+				}
+			}
+		);
 
-      const { data: parentData } = await supabase
-        .from('parents')
-        .select()
-        .eq('user_id', user.id)
-        .maybeSingle();
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === "visible") {
+				initializeSession();
+			}
+		};
 
-      if (parentData) {
-        console.log('User is parent'); // Add debugging
-        setIsAuthenticated(true);
-        setUserRole('parent');
-        setUserId(user.id);
-        return;
-      }
+		document.addEventListener("visibilitychange", handleVisibilityChange);
 
-      console.error('User role not found'); // Add debugging
-      throw new Error('User role not found');
-    } catch (err) {
-      throw new Error('Failed to verify user role');
-    }
-  };
+		return () => {
+			mounted = false;
+			authSubscription.data.subscription?.unsubscribe?.(); // Ensure compatibility
+			document.removeEventListener("visibilitychange", handleVisibilityChange);
+		};
+	}, []);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setIsAuthenticated(false);
-    setUserRole(null);
-    setUserId(null);
-  };
+	const signIn = async (email: string, password: string) => {
+		console.log("Signing in..."); // Add debugging
 
-  return (
-    <AuthContext.Provider value={{ isAuthenticated, userRole, userId, signIn, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
+		const { error } = await supabase.auth.signInWithPassword({
+			email,
+			password,
+		});
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+		if (error) {
+			console.error("Sign in error:", error); // Add debugging
+			throw new Error("Invalid email or password");
+		}
+	};
+
+	const signOut = async () => {
+		try {
+			await supabase.auth.signOut();
+			setUser(null);
+			setProfile(null);
+			window.location.href = "/";
+		} catch (error) {
+			console.error("Error signing out:", error);
+		}
+	};
+
+	if (loading) {
+		return (
+			<div className="min-h-screen flex items-center justify-center">
+				loading...
+			</div>
+		);
+	}
+
+	return (
+		<AuthContext.Provider value={{ user, profile, loading, signIn, signOut }}>
+			{children}
+		</AuthContext.Provider>
+	);
 }
