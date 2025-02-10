@@ -179,7 +179,7 @@ export default function WeeklyCalendar({
 												)}
 
 												{userRole === "owner" && (
-													<div className="flex space-x-2 mt-2 bg-blue-700">
+													<div className="flex space-x-2 mt-2">
 														<button
 															onClick={(e) => {
 																e.stopPropagation();
