@@ -15,25 +15,32 @@ import { addDays, format } from "date-fns";
 
 interface ClassInstance {
 	id: string;
-	class_id: string;
-	date: string;
-	status: string;
 	name: string;
+	status: string;
+	date: string;
+	end_date: string;
 	start_time: string;
 	end_time: string;
-	teacher_id: string;
 	teacher: {
+		id: string;
 		name: string;
 	};
-	location_id: string;
 	location: {
+		id: string;
 		name: string;
 	};
-	class: {
-		studio_id: string;
-		is_recurring: boolean;
+	studio: {
+		id: string;
+		name: string;
 	};
+	parent_class_id: string | null;
+	notes: string | null;
+	is_drop_in: boolean;
+	capacity: number | null;
+	drop_in_price: number | null;
+	is_recurring: boolean | null;
 	enrolledStudents?: string[];
+	modificationScope: "single" | "future" | "all";
 }
 
 export default function Classes() {
@@ -56,47 +63,42 @@ export default function Classes() {
 	const { profile } = useAuth();
 	const { timezone } = useLocalization();
 
-	const userRole = useMemo(() => profile?.role, [profile]);
-
 	const fetchClassInstances = useCallback(async () => {
-		if (
-			!userRole ||
-			!profile?.id ||
-			!initialized ||
-			queryInProgress ||
-			!profile.studio?.id
-		)
-			return;
-
 		try {
 			setQueryInProgress(true);
 
-			let query = supabase.from("class_instances").select(`
-          id,
-          class_id,
-          date,
-          status,
-          name,
-          start_time,
-          end_time,
-          teacher_id,
-          teacher:users (
-            name
-          ),
-          location_id,
-          location:locations (
-            name
-          ),
-          class:classes (
-            studio_id,
-            is_recurring
-          )
-        `);
+			let query = supabase.from("classes").select(`
+				id,
+				name,
+				status,
+				date,
+				end_date,
+				start_time,
+				end_time,
+				is_recurring,
+				parent_class_id,
+				notes,
+				is_drop_in,
+				capacity,
+				drop_in_price,
+				studio:studios (
+					id,
+					name
+				),
+				teacher:users (
+					id,
+					name
+				),
+				location:locations (
+					id,
+					name
+				)
+			`);
 
-			if (userRole === "parent") {
+			if (profile?.role === "parent") {
 				// For parents, filter by their studio but ensure we get all class details
 				query = query
-					.eq("class.studio_id", profile.studio.id)
+					.eq("studio_id", profile?.studio?.id || "")
 					.order("date", { ascending: true });
 			}
 
@@ -105,11 +107,11 @@ export default function Classes() {
 			if (error) throw error;
 
 			// For parent users, fetch enrolled students for each class
-			if (userRole === "parent") {
+			if (profile?.role === "parent") {
 				const instancesWithEnrollments = await Promise.all(
 					data.map(async (instance) => {
 						const students = await getEnrolledStudents(
-							instance.class_id,
+							instance.id,
 							profile?.id
 						);
 						return {
@@ -120,7 +122,7 @@ export default function Classes() {
 				);
 				setClassInstances(instancesWithEnrollments);
 			} else {
-				setClassInstances(data || []);
+				setClassInstances(data);
 			}
 		} catch (err) {
 			console.error("Error fetching class_instances:", err);
@@ -129,23 +131,16 @@ export default function Classes() {
 			setQueryInProgress(false);
 			setLoading(false);
 		}
-	}, [
-		profile?.id,
-		userRole,
-		initialized,
-		profile?.studio?.id,
-		queryInProgress,
-	]);
+	}, []);
 
-	// **useEffect to Fetch Data on Component Mount or Dependencies Change**
 	useEffect(() => {
 		fetchClassInstances();
-	}, [fetchClassInstances]);
+	}, []);
 
 	// **Handle Delete Operations**
 
 	const handleDelete = async (classItem: ClassInstance) => {
-		if (classItem.class.is_recurring) {
+		if (classItem.is_recurring) {
 			setModifyingClass({ class: classItem, action: "delete" });
 		} else if (window.confirm("Are you sure you want to delete this class?")) {
 			await deleteClass(classItem.id);
@@ -155,7 +150,7 @@ export default function Classes() {
 	const deleteClass = async (classId: string) => {
 		try {
 			const { error: deleteError } = await supabase
-				.from("class_instances")
+				.from("classes")
 				.delete()
 				.eq("id", classId);
 
@@ -173,7 +168,7 @@ export default function Classes() {
 	// **Handle Edit Operations**
 
 	const handleEdit = (classItem: ClassInstance) => {
-		if (classItem.class.is_recurring) {
+		if (classItem.is_recurring) {
 			// Avoid setting state if the same class is already being modified
 			if (
 				modifyingClass?.class.id !== classItem.id ||
@@ -193,7 +188,7 @@ export default function Classes() {
 	};
 
 	const handleSaveChanges = (classItem: ClassInstance, changes: any) => {
-		if (classItem.class.is_recurring) {
+		if (classItem.is_recurring) {
 			setPendingChanges(changes);
 			setModifyingClass({
 				class: classItem,
@@ -216,7 +211,7 @@ export default function Classes() {
 				if (scope === "single") {
 					// Delete only the selected instance
 					const { error } = await supabase
-						.from("class_instances")
+						.from("classes")
 						.delete()
 						.eq("id", classItem.id);
 
@@ -224,18 +219,18 @@ export default function Classes() {
 				} else if (scope === "future") {
 					// Delete this and future instances
 					const { error } = await supabase
-						.from("class_instances")
+						.from("classes")
 						.delete()
-						.eq("class_id", classItem.class_id)
+						.eq("id", classItem.id)
 						.gte("date", classItem.date);
 
 					if (error) throw error;
 				} else if (scope === "all") {
 					// Delete all instances
 					const { error } = await supabase
-						.from("class_instances")
+						.from("classes")
 						.delete()
-						.eq("class_id", classItem.class_id);
+						.eq("id", classItem.id);
 
 					if (error) throw error;
 				}
@@ -273,7 +268,7 @@ export default function Classes() {
 		const timeStr = `${formatTime(classItem.start_time)} - ${formatTime(
 			classItem.end_time
 		)}`;
-		if (classItem.class.is_recurring) {
+		if (classItem.is_recurring) {
 			const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 			return `${days[new Date(classItem.date).getDay()]} ${timeStr}`;
 		}
@@ -326,7 +321,7 @@ export default function Classes() {
 			{/* **Header Section** */}
 			<div className="flex justify-between items-center mb-6">
 				<h1 className="text-2xl font-bold text-brand-primary">Classes</h1>
-				{userRole === "owner" && (
+				{profile?.role === "owner" && (
 					<button
 						onClick={() => setShowAddForm(true)}
 						className="flex items-center px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-secondary-400"
@@ -403,16 +398,16 @@ export default function Classes() {
 				onDelete={(classItem) =>
 					setModifyingClass({ class: classItem, action: "delete" })
 				}
-				onBookDropIn={userRole === "parent" ? setBookingClass : undefined}
-				userRole={userRole}
+				onBookDropIn={profile?.role === "parent" ? setBookingClass : undefined}
+				userRole={profile?.role}
 			/>
 
 			{/* **Attendance Modal** */}
 			{selectedClass && (
 				<AttendanceModal
-					classId={selectedClass.class_id}
+					classId={selectedClass.id}
 					instanceId={selectedClass.id}
-					userRole={profile?.id!}
+					userRole={profile?.role!}
 					className={selectedClass.name}
 					date={selectedClass.date}
 					onClose={() => setSelectedClass(null)}

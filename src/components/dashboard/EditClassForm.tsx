@@ -15,28 +15,43 @@ interface Student {
 interface ClassData {
 	id: string;
 	name: string;
-	teacher_id: string;
-	location_id?: string;
+	status: string;
+	date: string;
+	end_date: string;
 	start_time: string;
 	end_time: string;
-	is_recurring: boolean;
-	day_of_week: number | null;
-	date: string | null;
-	modificationScope?: "single" | "future" | "all";
+	teacher: {
+		id: string;
+		name: string;
+	};
+	location: {
+		id: string;
+		name: string;
+	};
+	studio: {
+		id: string;
+		name: string;
+	};
+	parent_class_id: string | null;
+	notes: string | null;
+	is_drop_in: boolean;
+	capacity: number | null;
+	drop_in_price: number | null;
+	is_recurring: boolean | null;
+	enrolledStudents?: string[];
+	modificationScope: "single" | "future" | "all";
 }
 
 interface EditClassFormProps {
 	classData: ClassData;
 	onSuccess: () => void;
 	onCancel: () => void;
-	onSaveClick: (changes: any) => void;
 }
 
 export default function EditClassForm({
 	classData,
 	onSuccess,
 	onCancel,
-	onSaveClick,
 }: EditClassFormProps) {
 	const { teachers, locations } = useData();
 	const { profile } = useAuth();
@@ -50,10 +65,10 @@ export default function EditClassForm({
 		id: string;
 		label: string;
 	} | null>(
-		locations.find((loc) => loc.id === classData.location_id)
+		locations.find((loc) => loc.id === classData.location.id)
 			? {
-					id: classData.location_id!,
-					label: locations.find((loc) => loc.id === classData.location_id)!
+					id: classData.location.id,
+					label: locations.find((loc) => loc.id === classData.location.id)!
 						.name,
 			  }
 			: null
@@ -62,90 +77,63 @@ export default function EditClassForm({
 		id: string;
 		label: string;
 	} | null>(
-		teachers.find((t) => t.id === classData.teacher_id)
+		teachers.find((t) => t.id === classData.teacher.id)
 			? {
-					id: classData.teacher_id,
-					label: teachers.find((t) => t.id === classData.teacher_id)!.name,
+					id: classData.teacher.id,
+					label: teachers.find((t) => t.id === classData.teacher.id)!.name,
 			  }
 			: null
 	);
 	const [startTime, setStartTime] = useState(classData.start_time);
 	const [endTime, setEndTime] = useState(classData.end_time);
-	const [isRecurring, setIsRecurring] = useState(classData.is_recurring);
-	const [dayOfWeek, setDayOfWeek] = useState(
-		classData.day_of_week?.toString() || ""
+	const [isRecurring] = useState(classData.is_recurring);
+	const [isDropIn, setIsDropIn] = useState(classData.is_drop_in);
+	const [capacity, setCapacity] = useState(
+		classData.capacity?.toString() || ""
 	);
-	const [date, setDate] = useState(classData.date || "");
+	const [dropInPrice, setDropInPrice] = useState(
+		classData.drop_in_price?.toString() || ""
+	);
 	const [error, setError] = useState<string | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	useEffect(() => {
-		if (!profile?.studio?.id || !classData?.id) return;
+		const studioId = profile?.studio?.id;
+		if (!studioId || !classData?.id) return;
 
 		async function fetchData() {
 			try {
-				console.log(
-					"Fetching class instance details for class ID:",
-					classData.id
-				);
-
-				// Fetch class instance details to get location
-				const { data: instanceDetails, error: instanceError } = await supabase
-					.from("class_instances")
-					.select(
-						`
-            location_id,
-            location:locations (
-              id,
-              name,
-              address
-            )
-          `
-					)
-					.eq("id", classData.id)
-					.maybeSingle();
-
-				if (instanceError) throw instanceError;
-
-				if (instanceDetails?.location) {
-					setSelectedRoom({
-						id: instanceDetails.location.id,
-						label: instanceDetails.location.address
-							? `${instanceDetails.location.name} (${instanceDetails.location.address})`
-							: instanceDetails.location.name,
-					});
-				} else {
-					console.warn(
-						"No location found for class instance ID:",
-						classData.id
-					);
-					setSelectedRoom(null); // Allow manual selection
-				}
-
 				// Fetch all students in the studio
 				const { data: studentsData, error: studentsError } = await supabase
 					.from("students")
 					.select("id, name")
-					.eq("studio_id", profile?.studio?.id + "")
+					.eq("studio_id", studioId || "")
 					.order("name");
 
 				if (studentsError) throw studentsError;
 				setStudents(studentsData || []);
 
-				// Fetch enrolled students for this class instance
+				// Fetch enrolled students for this class
 				const { data: enrolledData, error: enrolledError } = await supabase
-					.from("instance_enrollments")
+					.from("class_students")
 					.select("student:students(id, name)")
-					.eq("class_instance_id", classData.id);
+					.eq("class_id", classData.id);
 
 				if (enrolledError) throw enrolledError;
 
 				if (enrolledData) {
 					setSelectedStudents(
-						enrolledData.map((enrollment) => ({
-							id: enrollment.student.id,
-							label: enrollment.student.name,
-						}))
+						enrolledData
+							.map((enrollment) => {
+								if (!enrollment.student) return null;
+								return {
+									id: enrollment.student.id,
+									label: enrollment.student.name,
+								};
+							})
+							.filter(
+								(item): item is { id: string; label: string } => item !== null
+							)
 					);
 				}
 			} catch (err) {
@@ -158,199 +146,80 @@ export default function EditClassForm({
 		fetchData();
 	}, [profile?.studio?.id, classData?.id]);
 
-	const studentOptions = React.useMemo(
-		() => students.map((student) => ({ id: student.id, label: student.name })),
-		[students]
-	);
-
-	const logClasses = React.useCallback((date) => {
-		if (process.env.NODE_ENV === "development") {
-			console.log(`Classes for date ${date}`);
-		}
-	}, []);
-
-	const validateForm = () => {
-		if (!name || !startTime || !endTime) {
-			setError("Please fill in all required fields");
-			return false;
-		}
-
-		if (isRecurring && !dayOfWeek) {
-			setError("Please select a day of the week for recurring classes");
-			return false;
-		}
-
-		if (!isRecurring && !date) {
-			setError("Please select a date for one-off classes");
-			return false;
-		}
-
-		return true;
-	};
-
 	const handleSubmit = async () => {
 		setError(null);
 		setIsSubmitting(true);
 
 		try {
-			console.log("Starting class update...");
-			console.log("Class data:", {
+			const studioId = profile?.studio?.id;
+			if (!studioId) throw new Error("Studio ID is required");
+
+			const updates = {
 				name,
-				teacher_id: selectedTeacher?.id,
-				location_id: selectedRoom?.id,
+				teacher_id: selectedTeacher?.id || "",
+				location_id: selectedRoom?.id || "",
 				start_time: startTime,
 				end_time: endTime,
-				is_recurring: isRecurring,
-				day_of_week: isRecurring ? parseInt(dayOfWeek) : null,
-				date: !isRecurring ? date : null,
-			});
+				is_drop_in: isDropIn,
+				capacity: isDropIn ? parseInt(capacity) : null,
+				drop_in_price: isDropIn ? parseFloat(dropInPrice) : null,
+			};
 
-			// Step 1: Update class instance details
-			const { error: updateError } = await supabase
-				.from("class_instances")
-				.update({
-					name,
-					teacher_id: selectedTeacher?.id,
-					location_id: selectedRoom?.id,
-					start_time: startTime,
-					end_time: endTime,
-				})
-				.eq("id", classData.id);
+			if (!isRecurring || classData.modificationScope === "single") {
+				// Update only this instance
+				const { error: updateError } = await supabase
+					.from("classes")
+					.update(updates)
+					.eq("id", classData.id);
 
-			if (updateError) {
-				console.error("Error updating class details:", updateError);
-				throw updateError;
+				if (updateError) throw updateError;
+			} else if (classData.parent_class_id) {
+				// For "future" scope, update this instance and all future instances
+				// For "all" scope, update all instances
+				const { error: updateError } = await supabase
+					.from("classes")
+					.update(updates)
+					.eq("parent_class_id", classData.parent_class_id)
+					.gte(
+						"date",
+						classData.modificationScope === "all"
+							? "1900-01-01"
+							: classData.date
+					)
+					.or(`id.eq.${classData.id}`); // Include this instance for both "future" and "all" scopes
+
+				if (updateError) throw updateError;
 			}
 
-			console.log("Class instance updated successfully.");
-
-			// Step 2: Fetch existing enrollments for this class instance
-			const { data: existingEnrollments, error: fetchEnrollmentsError } =
+			// Update student enrollments for this instance
+			if (!isRecurring || classData.modificationScope === "single") {
+				// Remove existing enrollments
 				await supabase
-					.from("instance_enrollments")
-					.select("student_id")
-					.eq("class_instance_id", classData.id);
-
-			if (fetchEnrollmentsError) {
-				console.error(
-					"Error fetching existing enrollments:",
-					fetchEnrollmentsError
-				);
-				throw fetchEnrollmentsError;
-			}
-
-			const existingEnrollmentIds =
-				existingEnrollments?.map((enrollment) => enrollment.student_id) || [];
-
-			// Step 3: Remove unenrolled students
-			const studentsToRemove = existingEnrollmentIds.filter(
-				(id) => !selectedStudents.some((student) => student.id === id)
-			);
-
-			if (studentsToRemove.length > 0) {
-				console.log("Removing unenrolled students:", studentsToRemove);
-				const { error: deleteError } = await supabase
-					.from("instance_enrollments")
+					.from("class_students")
 					.delete()
-					.eq("class_instance_id", classData.id)
-					.in("student_id", studentsToRemove);
+					.eq("class_id", classData.id);
 
-				if (deleteError) {
-					console.error("Error removing unenrolled students:", deleteError);
-					throw deleteError;
+				// Add new enrollments
+				if (selectedStudents.length > 0) {
+					const { error: enrollError } = await supabase
+						.from("class_students")
+						.insert(
+							selectedStudents.map((student) => ({
+								class_id: classData.id,
+								student_id: student.id,
+							}))
+						);
+
+					if (enrollError) throw enrollError;
 				}
 			}
 
-			// Step 4: Add new enrollments
-			const newEnrollments = selectedStudents.filter(
-				(student) => !existingEnrollmentIds.includes(student.id)
-			);
-
-			if (newEnrollments.length > 0) {
-				console.log("Adding new enrollments:", newEnrollments);
-				const { error: insertError } = await supabase
-					.from("instance_enrollments")
-					.insert(
-						newEnrollments.map((student) => ({
-							class_instance_id: classData.id,
-							student_id: student.id,
-						}))
-					);
-
-				if (insertError) {
-					console.error("Error adding new enrollments:", insertError);
-					throw insertError;
-				}
-			}
-
-			console.log("Enrollments updated successfully.");
 			onSuccess();
-			console.log("Class saved successfully.");
 		} catch (err) {
 			console.error("Error saving class:", err);
 			setError(err instanceof Error ? err.message : "Failed to save class");
 		} finally {
 			setIsSubmitting(false);
-		}
-	};
-
-	// Inside EditClassForm component, alongside existing functions
-	const handleDeleteAllInstances = async () => {
-		try {
-			const { error } = await supabase
-				.from("class_instances")
-				.delete()
-				.eq("class_id", classData.id); // Use class_id to delete all instances
-
-			if (error) {
-				console.error("Error deleting all instances:", error);
-				throw error;
-			}
-
-			console.log("All instances deleted successfully.");
-			onSuccess(); // Notify the parent component about the success
-		} catch (err) {
-			console.error("Error deleting all instances:", err);
-			setError(
-				err instanceof Error ? err.message : "Failed to delete all instances"
-			);
-		}
-	};
-
-	const handleEditInstances = async (modificationScope: "all" | "future") => {
-		try {
-			// Debug logs for tracing
-			console.log("Starting handleEditInstances...");
-			console.log("Modification Scope:", modificationScope);
-			console.log("Class ID:", classData.class_id);
-			console.log("Target Date:", classData.date);
-			console.log("ClassData passed to handleEditInstances:", classData);
-
-			// Call the Supabase RPC for bulk updates
-			const { error } = await supabase.rpc("bulk_update_class_instances", {
-				target_class_id: classData.class_id,
-				target_date: classData.date,
-				modification_scope: modificationScope,
-				updated_name: name,
-				updated_teacher_id: selectedTeacher?.id,
-				updated_location_id: selectedRoom?.id,
-				updated_start_time: startTime,
-				updated_end_time: endTime,
-			});
-
-			// Debug: Log the RPC result
-			if (error) {
-				console.error(`Error editing ${modificationScope} instances:`, error);
-				throw new Error(
-					`Failed to edit ${modificationScope} instances: ${error.message}`
-				);
-			}
-
-			console.log(`Successfully edited ${modificationScope} instances.`);
-			onSuccess(); // Notify parent component of success
-		} catch (err) {
-			console.error("Error in handleEditInstances:", err);
-			setError(err instanceof Error ? err.message : "Failed to edit instances");
 		}
 	};
 
@@ -406,59 +275,64 @@ export default function EditClassForm({
 				/>
 			</div>
 
-			<div>
-				<label className="flex items-center">
+			{/* Drop-in Class Options */}
+			<div className="space-y-4">
+				<div className="flex items-center space-x-2">
 					<input
 						type="checkbox"
-						checked={isRecurring}
-						onChange={(e) => setIsRecurring(e.target.checked)}
+						id="isDropIn"
+						checked={isDropIn}
+						onChange={(e) => setIsDropIn(e.target.checked)}
+						className="h-4 w-4 text-brand-primary border-gray-300 rounded focus:ring-brand-accent"
 					/>
-					<span className="ml-2">Recurring Weekly Class</span>
-				</label>
+					<label
+						htmlFor="isDropIn"
+						className="text-sm font-medium text-gray-700"
+					>
+						This is a drop-in class
+					</label>
+				</div>
+
+				{isDropIn && (
+					<div className="grid grid-cols-2 gap-4 pl-6">
+						<FormInput
+							id="capacity"
+							type="number"
+							label="Class Capacity"
+							value={capacity}
+							onChange={(e) => setCapacity(e.target.value)}
+							min="1"
+							required={isDropIn}
+						/>
+						<FormInput
+							id="dropInPrice"
+							type="number"
+							label="Drop-in Price"
+							value={dropInPrice}
+							onChange={(e) => setDropInPrice(e.target.value)}
+							min="0"
+							step="0.01"
+							required={isDropIn}
+						/>
+					</div>
+				)}
 			</div>
 
-			{isRecurring ? (
-				<select
-					value={dayOfWeek}
-					onChange={(e) => setDayOfWeek(e.target.value)}
-					required
-				>
-					<option value="">Select Day</option>
-					<option value="0">Sunday</option>
-					<option value="1">Monday</option>
-					<option value="2">Tuesday</option>
-					<option value="3">Wednesday</option>
-					<option value="4">Thursday</option>
-					<option value="5">Friday</option>
-					<option value="6">Saturday</option>
-				</select>
-			) : (
-				<FormInput
-					id="date"
-					type="date"
-					label="Class Date"
-					value={date}
-					onChange={(e) => setDate(e.target.value)}
-					required
+			{!isDropIn && (
+				<MultiSelectDropdown
+					id="students"
+					label="Select Students"
+					value={selectedStudents}
+					onChange={setSelectedStudents}
+					options={students.map((student) => ({
+						id: student.id,
+						label: student.name,
+					}))}
+					isLoading={loadingStudents}
 				/>
 			)}
 
-			<MultiSelectDropdown
-				id="students"
-				label="Select Students"
-				value={selectedStudents}
-				onChange={setSelectedStudents}
-				options={students.map((student) => ({
-					id: student.id,
-					label: student.name,
-					disabled: selectedStudents.some(
-						(selected) => selected.id === student.id
-					),
-				}))}
-				isLoading={loadingStudents}
-			/>
-
-			{error && <p className="text-red-500">{error}</p>}
+			{error && <p className="text-red-500 text-sm">{error}</p>}
 
 			<div className="flex justify-end space-x-3">
 				<button
@@ -470,12 +344,9 @@ export default function EditClassForm({
 				</button>
 				<button
 					type="button"
-					onClick={(e) => {
-						e.preventDefault();
-						if (validateForm()) handleSubmit();
-					}}
+					onClick={handleSubmit}
 					disabled={isSubmitting}
-					className="px-4 py-2 bg-brand-primary text-white rounded-md"
+					className="flex items-center px-4 py-2 bg-brand-primary text-white rounded-md hover:bg-brand-secondary-400 disabled:bg-gray-400"
 				>
 					<Save className="w-4 h-4 mr-2" />
 					Save Changes

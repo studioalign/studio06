@@ -50,13 +50,13 @@ export default function Students() {
 					.from("students")
 					.select(
 						`
-            id,
-            name,
-            date_of_birth,
-            parent:users!inner (
-              name
-            )
-          `
+							id,
+							name,
+							date_of_birth,
+							parent:users!inner (
+							name
+							)
+						`
 					)
 					.eq("studio_id", profile?.studio?.id)
 					.order("name");

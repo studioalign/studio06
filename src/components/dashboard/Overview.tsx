@@ -13,14 +13,11 @@ import StatsCard from "./StatsCard";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLocalization } from "../../contexts/LocalizationContext";
 import { formatCurrency } from "../../utils/formatters";
-import { useMemo } from "react";
 export default function Overview() {
 	const { profile } = useAuth();
 	const { currency } = useLocalization();
 
-	const userRole = useMemo(() => profile?.role, [profile]);
-
-	if (userRole === "owner") {
+	if (profile?.role === "owner") {
 		return (
 			<div className="space-y-8">
 				<h1 className="text-2xl font-bold text-brand-primary mb-6">
@@ -124,8 +121,7 @@ export default function Overview() {
 			</div>
 		);
 	}
-
-	if (userRole === "teacher") {
+	if (profile?.role === "teacher") {
 		return (
 			<div className="space-y-8">
 				<h1 className="text-2xl font-bold text-brand-primary">

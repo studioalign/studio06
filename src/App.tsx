@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import SignupForm from "./components/SignupForm";
 import SigninForm from "./components/SigninForm";
 import ForgotPasswordForm from "./components/ForgotPasswordForm";
@@ -11,7 +10,6 @@ import Students from "./components/dashboard/Students";
 import Payments from "./components/payments/Payments";
 import Plans from "./components/payments/Plans";
 import Invoices from "./components/payments/Invoices";
-import PaymentMethods from "./components/payments/PaymentMethods";
 import MessagesLayout from "./components/messages/MessagesLayout";
 import Overview from "./components/dashboard/Overview";
 import MyStudents from "./components/dashboard/MyStudents";

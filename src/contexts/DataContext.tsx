@@ -52,13 +52,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
 				const { data: teachersData, error: teachersError } = await supabase
 					.from("users")
 					.select(
-						"*, studio:studios!users_studio_id_fkey(id, name, address, phone, email)"
+						`*,
+					studio:studios!users_studio_id_fkey(
+						id, name, address, phone, email
+					)
+				`
 					)
 					.eq("studio_id", profile.studio?.id + "")
 					.eq("role", "teacher");
 
 				if (teachersError) throw teachersError;
-				setTeachers(teachersData || []);
+				setTeachers(teachersData);
 
 				// Fetch locations for the studio
 				const { data: locationsData, error: locationsError } = await supabase
@@ -69,7 +73,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
 				if (locationsError) throw locationsError;
 				setLocations(locationsData || []);
-
 				// TODO: Fetch students once the table is available
 			} else if (profile?.role === "teacher" || profile?.role === "parent") {
 				// Fetch teachers for the studio

@@ -106,45 +106,121 @@ export default function AddClassForm({
 				throw new Error("Please select an end date for recurring classes");
 			}
 
-			// Create the class
-			const { data: classData, error: classError } = await supabase
-				.from("classes")
-				.insert([
-					{
-						studio_id: profile?.studio.id,
-						name,
-						teacher_id: selectedTeacher.id,
-						start_time: startTime,
-						end_time: endTime,
-						is_recurring: isRecurring,
-						day_of_week: isRecurring ? parseInt(dayOfWeek) : null,
-						date: !isRecurring ? date : null,
-						end_date: isRecurring ? endDate : date, // For recurring classes use endDate, for one-off use date
-						location_id: selectedRoom.id,
-						is_drop_in: isDropIn,
-						capacity: isDropIn ? parseInt(capacity) : null,
-						drop_in_price: isDropIn ? parseFloat(dropInPrice) : null,
-					},
-				])
-				.select()
-				.single();
+			let classIds: string[] = [];
 
-			console.log(classError);
+			// Validate based on class type (recurring vs non-recurring)
+			if (!isRecurring) {
+				if (!date) {
+					throw new Error("Date is required for non-recurring classes");
+				}
+				// Insert single class
+				const { data, error: classError } = await supabase
+					.from("classes")
+					.insert([
+						{
+							studio_id: profile.studio.id || "",
+							name,
+							teacher_id: selectedTeacher.id,
+							start_time: startTime,
+							end_time: endTime,
+							date,
+							end_date: date, // For non-recurring, end_date equals date
+							location_id: selectedRoom.id,
+							is_drop_in: isDropIn,
+							capacity: isDropIn ? parseInt(capacity) : null,
+							drop_in_price: isDropIn ? parseFloat(dropInPrice) : null,
+							is_recurring: false,
+						},
+					])
+					.select("id");
 
-			if (classError) throw classError;
+				if (classError) throw classError;
+				classIds = data?.map((classData) => classData.id) || [];
+			} else {
+				if (!dayOfWeek) {
+					throw new Error("Day of week is required for recurring classes");
+				}
+				if (!endDate) {
+					throw new Error("End date is required for recurring classes");
+				}
+
+				// First, create a parent class entry
+				const { data: parentClass, error: parentClassError } = await supabase
+					.from("classes")
+					.insert([
+						{
+							studio_id: profile?.studio?.id || "",
+							name,
+							teacher_id: selectedTeacher.id,
+							start_time: startTime,
+							end_time: endTime,
+							date: new Date(date).toISOString().split("T")[0],
+							end_date: new Date(endDate).toISOString().split("T")[0],
+							location_id: selectedRoom.id,
+							is_drop_in: isDropIn,
+							capacity: isDropIn ? parseInt(capacity) : null,
+							drop_in_price: isDropIn ? parseFloat(dropInPrice) : null,
+							is_recurring: true,
+						},
+					])
+					.select("id")
+					.single();
+
+				console.log("parentClassError", parentClassError);
+
+				if (parentClassError) throw parentClassError;
+
+				// Generate dates for recurring classes
+				const dates = [];
+				const currentDate = new Date(date);
+				const daysDiff = (parseInt(dayOfWeek) - currentDate.getDay() + 7) % 7;
+				currentDate.setDate(currentDate.getDate() + daysDiff);
+
+				// Generate weekly dates
+				while (currentDate <= new Date(endDate)) {
+					dates.push(new Date(currentDate));
+					currentDate.setDate(currentDate.getDate() + 7);
+				}
+
+				// Insert all class instances with reference to parent
+				const { data, error: classError } = await supabase
+					.from("classes")
+					.insert(
+						dates.map((classDate) => ({
+							studio_id: profile?.studio?.id || "",
+							name,
+							teacher_id: selectedTeacher.id,
+							start_time: startTime,
+							end_time: endTime,
+							date: classDate.toISOString().split("T")[0],
+							end_date: classDate.toISOString().split("T")[0],
+							location_id: selectedRoom.id,
+							is_drop_in: isDropIn,
+							capacity: isDropIn ? parseInt(capacity) : null,
+							drop_in_price: isDropIn ? parseFloat(dropInPrice) : null,
+							parent_class_id: parentClass?.id,
+							is_recurring: true,
+						}))
+					)
+					.select("id");
+
+				if (classError) throw classError;
+				classIds = data?.map((classData) => classData.id) || [];
+			}
 
 			// Add students to the class if any are selected
-			if (selectedStudents.length > 0 && classData) {
-				const { error: studentsError } = await supabase
-					.from("class_students")
-					.insert(
-						selectedStudents.map((student) => ({
-							class_id: classData.id,
-							student_id: student.id,
-						}))
-					);
-
-				if (studentsError) throw studentsError;
+			if (selectedStudents.length > 0 && classIds) {
+				classIds.forEach(async (classId) => {
+					const { error: studentsError } = await supabase
+						.from("class_students")
+						.insert(
+							selectedStudents.map((student) => ({
+								class_id: classId,
+								student_id: student.id,
+							}))
+						);
+					if (studentsError) throw studentsError;
+				});
 			}
 
 			onSuccess();
@@ -226,7 +302,7 @@ export default function AddClassForm({
 				</label>
 			</div>
 
-			{isRecurring ? (
+			{isRecurring && (
 				<select
 					value={dayOfWeek}
 					onChange={(e) => setDayOfWeek(e.target.value)}
@@ -242,16 +318,16 @@ export default function AddClassForm({
 					<option value="5">Friday</option>
 					<option value="6">Saturday</option>
 				</select>
-			) : (
-				<FormInput
-					id="date"
-					type="date"
-					label="Class Date"
-					value={date}
-					onChange={(e) => setDate(e.target.value)}
-					required
-				/>
 			)}
+
+			<FormInput
+				id="date"
+				type="date"
+				label="Class Date"
+				value={date}
+				onChange={(e) => setDate(e.target.value)}
+				required
+			/>
 
 			{isRecurring && (
 				<FormInput
